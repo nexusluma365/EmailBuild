@@ -5,6 +5,7 @@ import { useState } from "react";
 import EmailBuilder from "@/components/EmailBuilder";
 import Subscribers from "@/components/Subscribers";
 import SendPanel from "@/components/SendPanel";
+import { buildEmailHtml } from "@/lib/emailTemplate";
 
 const defaultEmail = {
   subject: "",
@@ -19,7 +20,15 @@ const defaultEmail = {
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [activeSection, setActiveSection] = useState("builder");
-  const [emailData, setEmailData] = useState(defaultEmail);
+  const [emailData, setEmailData] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("email_studio_draft");
+        if (saved) return { ...defaultEmail, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return defaultEmail;
+  });
 
   if (status === "loading") {
     return (
@@ -33,7 +42,7 @@ export default function HomePage() {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", overflow:"hidden" }}>
-      <TopBar session={session} activeSection={activeSection} emailData={emailData} />
+      <TopBar session={session} activeSection={activeSection} emailData={emailData} onPublish={() => setActiveSection("send")} onPreview={() => { const w = window.open("","_blank"); w.document.write(buildEmailHtml(emailData)); w.document.close(); }} onSave={() => { try { localStorage.setItem("email_studio_draft", JSON.stringify(emailData)); alert("Draft saved!"); } catch(e) { alert("Could not save draft."); } }} />
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
         <IconRail activeSection={activeSection} setActiveSection={setActiveSection} onSignOut={() => signOut()} />
         <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
@@ -47,17 +56,17 @@ export default function HomePage() {
 }
 
 /* ─── TOP BAR ─────────────────────────────────────────────────────────── */
-function TopBar({ session, activeSection, emailData }) {
+function TopBar({ session, activeSection, emailData, onPublish, onPreview, onSave }) {
   const sectionLabel = { builder:"Email Builder", subscribers:"Subscribers", send:"Send Campaign" };
 
   const iconBtns = [
-    { id:"save",     label:"Save draft",         d:<path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>,  extra:<polyline points="17,21 17,13 7,13 7,21"/>, extra2:<polyline points="7,3 7,8 15,8"/> },
-    { id:"copy",     label:"Duplicate",           d:<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></> },
-    { id:"edit",     label:"Edit mode",  active:true, d:<><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></> },
-    { id:"add",      label:"Add block",           d:<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></> },
-    { id:"layers",   label:"Layers",              d:<><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></> },
-    { id:"settings", label:"Settings",            d:<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></> },
-    { id:"globe",    label:"Preview in browser",  d:<><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></> },
+    { id:"save",     label:"Save draft",         onClick: onSave,    d:<path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/> },
+    { id:"copy",     label:"Duplicate",           onClick: null,      d:<><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></> },
+    { id:"edit",     label:"Edit mode",  active:true, onClick: null,  d:<><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></> },
+    { id:"add",      label:"Add block",           onClick: null,      d:<><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></> },
+    { id:"layers",   label:"Layers",              onClick: null,      d:<><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></> },
+    { id:"settings", label:"Settings",            onClick: null,      d:<><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></> },
+    { id:"globe",    label:"Preview in browser",  onClick: onPreview, d:<><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></> },
   ];
 
   return (
@@ -88,10 +97,11 @@ function TopBar({ session, activeSection, emailData }) {
 
       {/* Center icon strip */}
       <div style={{ display:"flex", alignItems:"center", gap:1, flex:1 }}>
-        {iconBtns.map(({ id, label, d, active }) => (
+        {iconBtns.map(({ id, label, d, active, onClick }) => (
           <button key={id} title={label}
-            style={{ width:32, height:32, borderRadius:6, border:"none", background:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color: active ? "#D05A2C" : "#6B7280", position:"relative" }}
-            onMouseEnter={e => e.currentTarget.style.background = "#F4EFE9"}
+            onClick={onClick || undefined}
+            style={{ width:32, height:32, borderRadius:6, border:"none", background:"none", cursor: onClick ? "pointer" : "default", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color: active ? "#D05A2C" : "#6B7280", position:"relative", opacity: onClick || active ? 1 : 0.45 }}
+            onMouseEnter={e => { if (onClick || active) e.currentTarget.style.background = "#F4EFE9"; }}
             onMouseLeave={e => e.currentTarget.style.background = "none"}
           >
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
@@ -107,6 +117,7 @@ function TopBar({ session, activeSection, emailData }) {
 
       {/* Publish */}
       <button
+        onClick={onPublish}
         style={{ background:"#D05A2C", color:"#fff", border:"none", borderRadius:6, padding:"7px 16px", fontWeight:600, fontSize:13, cursor:"pointer", fontFamily:"inherit", marginLeft:4 }}
         onMouseEnter={e => e.currentTarget.style.background = "#B84E25"}
         onMouseLeave={e => e.currentTarget.style.background = "#D05A2C"}

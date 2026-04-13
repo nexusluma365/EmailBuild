@@ -399,9 +399,14 @@ function BlockContent({ typeId, emailData }) {
     case "cta":
       return (
         <div style={{ padding:"14px 28px 20px" }}>
-          <div style={{ display:"inline-block", background: emailData.accentColor || "#D05A2C", borderRadius:8, padding:"13px 28px", fontSize:15, fontWeight:700, color:"#fff", letterSpacing:"0.01em" }}>
+          <a
+            href={emailData.ctaLink && emailData.ctaLink !== "https://" ? emailData.ctaLink : "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => { if (emailData.ctaLink && emailData.ctaLink !== "https://") e.stopPropagation(); }}
+            style={{ display:"inline-block", background: emailData.accentColor || "#D05A2C", borderRadius:8, padding:"13px 28px", fontSize:15, fontWeight:700, color:"#fff", letterSpacing:"0.01em", textDecoration:"none", cursor:"pointer" }}>
             {emailData.ctaText || "Click Here"} →
-          </div>
+          </a>
         </div>
       );
     case "divider":
@@ -634,7 +639,25 @@ function BlockEditFields({ typeId, emailData, update }) {
     case "image":
       return (
         <>
-          <Field label="Image URL">
+          <Field label="Upload from Computer">
+            <label style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"9px 0", border:"1.5px dashed #C5B8AC", borderRadius:8, cursor:"pointer", fontSize:12.5, color:"#6B7280", fontWeight:500, background:"#FAFAF9", transition:"all 0.15s" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor="#D05A2C"; e.currentTarget.style.color="#D05A2C"; e.currentTarget.style.background="#FDF3EE"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor="#C5B8AC"; e.currentTarget.style.color="#6B7280"; e.currentTarget.style.background="#FAFAF9"; }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
+              Choose Image File
+              <input type="file" accept="image/*" style={{ display:"none" }}
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = ev => update("imageUrl", ev.target.result);
+                  reader.readAsDataURL(file);
+                }}
+              />
+            </label>
+          </Field>
+          <Field label="Or Paste Image URL">
             <input type="url" value={emailData.imageUrl} onChange={e => update("imageUrl", e.target.value)} placeholder="https://example.com/image.jpg" className="field-input"/>
           </Field>
           {emailData.imageUrl && (
