@@ -54,8 +54,17 @@ export async function POST(req) {
     return Response.json({ success: true, messageId: result.id });
   } catch (err) {
     console.error("Gmail send error:", err);
+
+    const message = err?.message || "Failed to send email.";
+    if (/insufficient authentication scopes/i.test(message)) {
+      return Response.json(
+        { error: "Google account is missing Gmail send permission. Please sign out and reconnect Google." },
+        { status: 401 }
+      );
+    }
+
     return Response.json(
-      { error: err.message || "Failed to send email." },
+      { error: message },
       { status: 500 }
     );
   }
