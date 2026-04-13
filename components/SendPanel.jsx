@@ -7,7 +7,7 @@ function load() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||"[]
 
 export default function SendPanel({ blocks, globalStyles, session }) {
   const [subs, setSubs]         = useState([]);
-  const [mode, setMode]         = useState("test");
+  const [mode, setMode]         = useState("campaign");
   const [testEmail, setTestEmail] = useState(session?.user?.email || "");
   const [results, setResults]   = useState([]);
   const [sending, setSending]   = useState(false);
@@ -40,7 +40,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
   async function handleSend() {
     if (!isReady) return;
     setDone(false);
-    if (mode === "test") {
+    if (mode === "single") {
       if (!testEmail) return;
       setSending(true);
       setResults([{ email: testEmail, status: "sending" }]);
@@ -86,10 +86,10 @@ export default function SendPanel({ blocks, globalStyles, session }) {
       {/* Left panel */}
       <div style={{width:276,background:"#fff",borderRight:"1px solid #E5E0DA",display:"flex",flexDirection:"column",overflow:"hidden",flexShrink:0}}>
         <div style={{display:"flex",borderBottom:"1px solid #E5E0DA"}}>
-          {["test","campaign"].map(t=>(
+          {["single","campaign"].map(t=>(
             <button key={t} onClick={()=>{setMode(t);setResults([]);setDone(false);}}
               style={{flex:1,padding:"12px 0",border:"none",background:"none",fontFamily:"inherit",fontSize:12.5,fontWeight:600,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer",color:mode===t?ACC:"#9CA3AF",borderBottom:mode===t?`2px solid ${ACC}`:"2px solid transparent",marginBottom:-1}}>
-              {t==="test"?"Test":"Campaign"}
+              {t==="single"?"Single Recipient":"Audience"}
             </button>
           ))}
         </div>
@@ -137,12 +137,12 @@ export default function SendPanel({ blocks, globalStyles, session }) {
           </button>
 
           {/* Mode-specific */}
-          {mode==="test" ? (<>
-            <div style={{fontSize:10.5,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",color:"#9CA3AF",marginBottom:8}}>Send To</div>
+          {mode==="single" ? (<>
+            <div style={{fontSize:10.5,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.07em",color:"#9CA3AF",marginBottom:8}}>Recipient</div>
             <input type="email" value={testEmail} onChange={e=>setTestEmail(e.target.value)}
-              placeholder="test@example.com" className="field-input" style={{marginBottom:10}} disabled={sending}/>
+              placeholder="recipient@example.com" className="field-input" style={{marginBottom:10}} disabled={sending}/>
             <SendBtn onClick={handleSend} disabled={!isReady||!testEmail||sending} sending={sending}>
-              Send Test Email
+              Send Email
             </SendBtn>
           </>) : (<>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
@@ -167,7 +167,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
               </div>
             )}
             <SendBtn onClick={handleSend} disabled={!isReady||subs.length===0||sending} sending={sending}>
-              Send to {subs.length} Subscriber{subs.length!==1?"s":""}
+              Send to {subs.length} Recipient{subs.length!==1?"s":""}
             </SendBtn>
           </>)}
         </div>

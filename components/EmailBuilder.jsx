@@ -34,7 +34,7 @@ const BD = {
   headline: {text:"Your Headline Here",fontSize:28,color:"#0f0f1a",align:"left",fontWeight:"800",url:""},
   text:     {html:"<p>Write your message here. Engage your readers with compelling, clear content that drives them to take action.</p>",fontSize:15,color:"#444455"},
   image:    {src:"",alt:"",link:"",caption:"",borderRadius:8},
-  button:   {text:"Get Started →",url:"",bgColor:ACC,textColor:"#ffffff",align:"center",size:"large",fullWidth:false,radius:8},
+  button:   {text:"Get Started →",url:"",bgColor:ACC,textColor:"#ffffff",align:"center",size:"large",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC},
   divider:  {color:"#E5E0DA",style:"solid",thickness:1,margin:20},
   spacer:   {height:32},
   columns:  {leftHtml:"<p><strong>Column 1</strong><br/>Add your content here.</p>",rightHtml:"<p><strong>Column 2</strong><br/>Add your content here.</p>",gap:20,color:"#444455",fontSize:14},
@@ -52,7 +52,7 @@ const TEMPLATES = {
       {type:"spacer",  data:{height:48}},
       {type:"footer",  data:{...BD.footer}},
     ]),
-    global:{bgColor:"#f4f4f7",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:ACC},
+    global:{bgColor:"#f4f4f7",contentBgColor:"#ffffff",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:ACC,containerRadius:0,containerBorderWidth:0,containerBorderColor:"#E5E0DA",containerShadow:"medium",canvasPadding:20},
   },
   newsletter: {
     name:"Newsletter", emoji:"📧", desc:"Monthly updates & stories",
@@ -62,13 +62,13 @@ const TEMPLATES = {
       {type:"image",    data:{...BD.image}},
       {type:"headline", data:{text:"What's New This Month",fontSize:26,color:"#0f0f1a",align:"left",fontWeight:"800"}},
       {type:"text",     data:{html:"<p>We're excited to share the latest updates, stories, and highlights from our team. There's so much to cover — let's dive right in!</p>",fontSize:15,color:"#444455"}},
-      {type:"button",   data:{text:"Read Full Story →",url:"",bgColor:ACC,textColor:"#fff",align:"left",size:"medium",fullWidth:false,radius:8}},
+      {type:"button",   data:{text:"Read Full Story →",url:"",bgColor:ACC,textColor:"#fff",align:"left",size:"medium",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC}},
       {type:"divider",  data:{...BD.divider}},
       {type:"headline", data:{text:"More Highlights",fontSize:20,color:"#0f0f1a",align:"left",fontWeight:"700"}},
       {type:"columns",  data:{leftHtml:"<p><strong>Story One</strong><br/>A short description of your first story or highlight.</p>",rightHtml:"<p><strong>Story Two</strong><br/>A short description of your second story or highlight.</p>",gap:20,color:"#444455",fontSize:14}},
       {type:"footer",   data:{...BD.footer}},
     ]),
-    global:{bgColor:"#f4f4f7",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:ACC},
+    global:{bgColor:"#f4f4f7",contentBgColor:"#ffffff",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:ACC,containerRadius:0,containerBorderWidth:0,containerBorderColor:"#E5E0DA",containerShadow:"medium",canvasPadding:20},
   },
   promo: {
     name:"Promotional", emoji:"🔥", desc:"Sales, offers & launches",
@@ -78,11 +78,11 @@ const TEMPLATES = {
       {type:"image",    data:{...BD.image}},
       {type:"headline", data:{text:"50% Off — This Weekend Only",fontSize:30,color:ACC,align:"center",fontWeight:"900"}},
       {type:"text",     data:{html:"<p style='text-align:center'>Don't miss our biggest sale of the year. This offer expires Sunday at midnight — act fast!</p>",fontSize:16,color:"#444455"}},
-      {type:"button",   data:{text:"Shop Now — Save 50%",url:"",bgColor:ACC,textColor:"#fff",align:"center",size:"large",fullWidth:true,radius:8}},
+      {type:"button",   data:{text:"Shop Now — Save 50%",url:"",bgColor:ACC,textColor:"#fff",align:"center",size:"large",fullWidth:true,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC}},
       {type:"text",     data:{html:"<p style='text-align:center;font-size:12px;color:#9CA3AF'>Use code <strong>SAVE50</strong> at checkout &bull; Ends Sunday midnight</p>",fontSize:12,color:"#9CA3AF"}},
       {type:"footer",   data:{...BD.footer}},
     ]),
-    global:{bgColor:"#fff5f0",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:ACC},
+    global:{bgColor:"#fff5f0",contentBgColor:"#ffffff",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:ACC,containerRadius:0,containerBorderWidth:0,containerBorderColor:"#F0C4A8",containerShadow:"medium",canvasPadding:20},
   },
   welcome: {
     name:"Welcome Email", emoji:"👋", desc:"Onboard new subscribers",
@@ -91,12 +91,12 @@ const TEMPLATES = {
       {type:"header",   data:{logoText:"YourApp",logoUrl:"",bgColor:"#3730A3",textColor:"#fff",align:"center"}},
       {type:"headline", data:{text:"You're officially in! 🎉",fontSize:30,color:"#0f0f1a",align:"center",fontWeight:"800"}},
       {type:"text",     data:{html:"<p style='text-align:center'>We're thrilled to have you on board. Everything is ready for you. Let's get you started!</p>",fontSize:16,color:"#444455"}},
-      {type:"button",   data:{text:"Go to Your Dashboard →",url:"",bgColor:"#3730A3",textColor:"#fff",align:"center",size:"large",fullWidth:false,radius:8}},
+      {type:"button",   data:{text:"Go to Your Dashboard →",url:"",bgColor:"#3730A3",textColor:"#fff",align:"center",size:"large",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:"#3730A3"}},
       {type:"divider",  data:{...BD.divider,margin:28}},
       {type:"columns",  data:{leftHtml:"<p><strong>📚 Step 1: Set up</strong><br/>Customize your profile and preferences in just a few clicks.</p>",rightHtml:"<p><strong>🚀 Step 2: Explore</strong><br/>Discover features built to make your life easier.</p>",gap:20,color:"#444455",fontSize:14}},
       {type:"footer",   data:{...BD.footer}},
     ]),
-    global:{bgColor:"#f0f4ff",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:"#3730A3"},
+    global:{bgColor:"#f0f4ff",contentBgColor:"#ffffff",fontFamily:"'Helvetica Neue',Arial,sans-serif",accentColor:"#3730A3",containerRadius:0,containerBorderWidth:0,containerBorderColor:"#C7D2FE",containerShadow:"medium",canvasPadding:20},
   },
 };
 
@@ -214,12 +214,13 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
             </div>
 
             {/* Email shell */}
-            <div style={{background:globalStyles?.bgColor||"#f4f4f7",padding:"0 0 20px",borderRadius:"0 0 10px 10px",minHeight:500}}
+            <div style={{background:globalStyles?.bgColor||"#f4f4f7",padding:`0 0 ${globalStyles?.canvasPadding ?? 20}px`,borderRadius:"0 0 10px 10px",minHeight:500}}
               onClick={e=>e.stopPropagation()}>
-              <div style={{maxWidth:600,margin:"0 auto",background:"#fff",boxShadow:"0 4px 24px rgba(0,0,0,0.07)",fontFamily:ff}}>
+              <div style={{maxWidth:600,margin:"0 auto",background:globalStyles?.contentBgColor||"#fff",boxShadow:getContainerShadow(globalStyles?.containerShadow),fontFamily:ff,borderRadius:globalStyles?.containerRadius||0,overflow:"hidden",border:`${globalStyles?.containerBorderWidth||0}px solid ${globalStyles?.containerBorderColor||BRD}`}}>
                 {(blocks||[]).map((block,idx)=>(
                   <BlockRow key={block.id} block={block} idx={idx} total={(blocks||[]).length}
                     isSelected={selectedId===block.id} ff={ff}
+                    globalStyles={globalStyles}
                     onSelect={()=>{setSelectedId(block.id);setPanelTab("edit");}}
                     onUpdate={p=>updBlock(block.id,p)}
                     onRemove={()=>removeBlock(block.id)}
@@ -327,6 +328,9 @@ function DesignPanel({blocks,onAdd,globalStyles,setGlobalStyles,onPickTemplate})
         <Fld label="Background Color">
           <ColorRow value={globalStyles?.bgColor||"#f4f4f7"} onChange={v=>upd("bgColor",v)} swatches={["#f4f4f7","#fff5f0","#f0f4ff","#f0fdf4","#fafafa","#1a1d2e"]}/>
         </Fld>
+        <Fld label="Content Background">
+          <ColorRow value={globalStyles?.contentBgColor||"#ffffff"} onChange={v=>upd("contentBgColor",v)} swatches={["#ffffff","#FAFAF9","#FFF7ED","#F8FAFC","#EEF2FF","#ECFDF5"]}/>
+        </Fld>
         <Fld label="Font Family">
           <select value={globalStyles?.fontFamily} onChange={e=>upd("fontFamily",e.target.value)} className="field-input" style={{fontSize:11.5}}>
             {FONTS.map(f=><option key={f.v} value={f.v}>{f.l}</option>)}
@@ -334,6 +338,26 @@ function DesignPanel({blocks,onAdd,globalStyles,setGlobalStyles,onPickTemplate})
         </Fld>
         <Fld label="Accent Color">
           <ColorRow value={globalStyles?.accentColor||ACC} onChange={v=>upd("accentColor",v)} swatches={PRESETS}/>
+        </Fld>
+        <DLabel>Container</DLabel>
+        <Fld label="Corner Radius">
+          <Slider min={0} max={32} value={globalStyles?.containerRadius||0} onChange={v=>upd("containerRadius",v)} unit="px"/>
+        </Fld>
+        <Fld label="Border Width">
+          <Slider min={0} max={8} value={globalStyles?.containerBorderWidth||0} onChange={v=>upd("containerBorderWidth",v)} unit="px"/>
+        </Fld>
+        <Fld label="Border Color">
+          <ColorRow value={globalStyles?.containerBorderColor||BRD} onChange={v=>upd("containerBorderColor",v)} swatches={["#E5E0DA","#F0C4A8","#C7D2FE","#D1D5DB","#1A1D2E","#ffffff"]}/>
+        </Fld>
+        <Fld label="Shadow">
+          <div style={{display:"flex",gap:6}}>
+            {["none","soft","medium","strong"].map(s=>(
+              <Tb key={s} active={(globalStyles?.containerShadow||"medium")===s} onClick={()=>upd("containerShadow",s)}>{s.charAt(0).toUpperCase()+s.slice(1)}</Tb>
+            ))}
+          </div>
+        </Fld>
+        <Fld label="Outer Padding">
+          <Slider min={0} max={48} value={globalStyles?.canvasPadding ?? 20} onChange={v=>upd("canvasPadding",v)} unit="px"/>
         </Fld>
       </div>
 
@@ -485,11 +509,23 @@ function BlockFields({block,onUpdate}) {
         {data.url&&data.url!=="https://"&&data.url!==""&&<p style={{marginTop:4,fontSize:11,color:"#16A34A"}}>✓ Link set — button is clickable</p>}
       </Fld>
       <DLabel>Style</DLabel>
+      <Fld label="">
+        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+          <input type="checkbox" checked={!!data.useAccentColor} onChange={e=>u("useAccentColor",e.target.checked)}/>
+          <span style={{fontSize:12.5,color:"#4B5563"}}>Use global accent color</span>
+        </label>
+      </Fld>
       <Fld label="Button Color">
         <ColorRow value={data.bgColor||ACC} onChange={v=>u("bgColor",v)} swatches={PRESETS}/>
       </Fld>
       <Fld label="Text Color">
         <ColorRow value={data.textColor||"#fff"} onChange={v=>u("textColor",v)} swatches={["#ffffff","#1A1D2E","#F4EFE9"]}/>
+      </Fld>
+      <Fld label="Border Color">
+        <ColorRow value={data.borderColor||data.bgColor||ACC} onChange={v=>u("borderColor",v)} swatches={PRESETS}/>
+      </Fld>
+      <Fld label="Border Width">
+        <Slider min={0} max={6} value={data.borderWidth||0} onChange={v=>u("borderWidth",v)} unit="px"/>
       </Fld>
       <Fld label="Alignment">
         <Align value={data.align||"center"} onChange={v=>u("align",v)}/>
@@ -660,7 +696,7 @@ function RTE({html,onChange}) {
 }
 
 /* ─── BLOCK ROW (canvas wrapper) ─────────────────────── */
-function BlockRow({block,idx,total,isSelected,ff,onSelect,onUpdate,onRemove,onDuplicate,onMoveUp,onMoveDown}) {
+function BlockRow({block,idx,total,isSelected,ff,globalStyles,onSelect,onUpdate,onRemove,onDuplicate,onMoveUp,onMoveDown}) {
   const [hov,setHov]=useState(false);
   const show=isSelected||hov;
 
@@ -674,7 +710,7 @@ function BlockRow({block,idx,total,isSelected,ff,onSelect,onUpdate,onRemove,onDu
             {BTYPES.find(b=>b.id===block.type)?.label||block.type}
           </div>
         )}
-        <BPrev block={block} ff={ff} isSelected={isSelected} onUpdate={onUpdate}/>
+        <BPrev block={block} ff={ff} globalStyles={globalStyles} isSelected={isSelected} onUpdate={onUpdate}/>
       </div>
 
       {show&&(
@@ -699,7 +735,7 @@ const CB=({title,onClick,children,danger})=>(
 );
 
 /* ─── BLOCK PREVIEW RENDERERS ────────────────────────── */
-function BPrev({block,ff,isSelected,onUpdate}) {
+function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
   const {type,data}=block;
   const u=(k,v)=>onUpdate({[k]:v});
 
@@ -763,11 +799,13 @@ function BPrev({block,ff,isSelected,onUpdate}) {
       const pad=data.size==="small"?"10px 20px":data.size==="large"?"16px 36px":"13px 28px";
       const fs=data.size==="small"?13:data.size==="large"?16:14.5;
       const hasUrl=data.url&&data.url!==""&&data.url!=="https://";
+      const bg = data.useAccentColor ? (globalStyles?.accentColor||ACC) : (data.bgColor||ACC);
+      const borderColor = data.useAccentColor ? (globalStyles?.accentColor||ACC) : (data.borderColor||data.bgColor||ACC);
       return (
         <div style={{padding:"12px 32px 20px",textAlign:data.align||"center",fontFamily:ff}}>
           <a href={hasUrl?data.url:"#"} target={hasUrl?"_blank":undefined} rel="noopener noreferrer"
             onClick={e=>{if(!hasUrl)e.preventDefault();e.stopPropagation();}}
-            style={{display:data.fullWidth?"block":"inline-block",background:data.bgColor||ACC,color:data.textColor||"#fff",padding:pad,borderRadius:data.radius||8,fontSize:fs,fontWeight:700,textDecoration:"none",textAlign:"center",letterSpacing:"0.01em"}}>
+            style={{display:data.fullWidth?"block":"inline-block",background:bg,color:data.textColor||"#fff",padding:pad,borderRadius:data.radius||8,fontSize:fs,fontWeight:700,textDecoration:"none",textAlign:"center",letterSpacing:"0.01em",border:`${data.borderWidth||0}px solid ${borderColor}`}}>
             {data.text||"Click Here →"}
           </a>
           {!hasUrl&&<div style={{marginTop:6,fontSize:10.5,color:"#D97706"}}>⚠ Add a URL in the Edit panel to activate this button</div>}
@@ -858,4 +896,11 @@ function Align({value,onChange}) {
     const icons=[<><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="11" x2="15" y2="11"/><line x1="3" y1="16" x2="18" y2="16"/></>,<><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="11" x2="17" y2="11"/><line x1="5" y1="16" x2="19" y2="16"/></>,<><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="11" x2="21" y2="11"/><line x1="6" y1="16" x2="21" y2="16"/></>];
     return <button key={v} onClick={()=>onChange(v)} style={{flex:1,padding:"6px 0",border:`1px solid ${value===v?ACC:BRD}`,borderRadius:5,background:value===v?"#FDF3EE":"#fff",color:value===v?ACC:"#6B7280",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">{icons[i]}</svg></button>;
   })}</div>;
+}
+
+function getContainerShadow(level) {
+  if (level === "none") return "none";
+  if (level === "soft") return "0 2px 10px rgba(0,0,0,0.05)";
+  if (level === "strong") return "0 12px 36px rgba(0,0,0,0.16)";
+  return "0 4px 24px rgba(0,0,0,0.07)";
 }

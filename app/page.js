@@ -9,8 +9,14 @@ import { buildEmailHtmlFromBlocks } from "@/lib/emailTemplate";
 
 const DEFAULT_STYLES = {
   bgColor: "#f4f4f7",
+  contentBgColor: "#ffffff",
   fontFamily: "'Helvetica Neue',Arial,sans-serif",
   accentColor: "#D05A2C",
+  containerRadius: 0,
+  containerBorderWidth: 0,
+  containerBorderColor: "#E5E0DA",
+  containerShadow: "medium",
+  canvasPadding: 20,
 };
 
 export default function HomePage() {
@@ -107,7 +113,7 @@ export default function HomePage() {
 
 /* ─── TOP BAR ─────────────────────────────────────────── */
 function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave, onSignOut, onReconnect }) {
-  const sectionLabel = { builder:"Email Builder", subscribers:"Subscribers", send:"Send Campaign" };
+  const sectionLabel = { builder:"Email Builder", subscribers:"Subscribers", send:"Send Live" };
   const ACC = "#D05A2C";
 
   const iconBtns = [
