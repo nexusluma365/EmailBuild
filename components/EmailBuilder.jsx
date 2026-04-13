@@ -31,7 +31,7 @@ const BTYPES = [
 const BD = {
   subject:  {text:"Your Subject Line Here"},
   header:   {logoText:"Your Brand",logoUrl:"",bgColor:"#1A1D2E",textColor:"#ffffff",align:"center"},
-  headline: {text:"Your Headline Here",fontSize:28,color:"#0f0f1a",align:"left",fontWeight:"800"},
+  headline: {text:"Your Headline Here",fontSize:28,color:"#0f0f1a",align:"left",fontWeight:"800",url:""},
   text:     {html:"<p>Write your message here. Engage your readers with compelling, clear content that drives them to take action.</p>",fontSize:15,color:"#444455"},
   image:    {src:"",alt:"",link:"",caption:"",borderRadius:8},
   button:   {text:"Get Started →",url:"",bgColor:ACC,textColor:"#ffffff",align:"center",size:"large",fullWidth:false,radius:8},
@@ -414,6 +414,17 @@ function BlockFields({block,onUpdate}) {
       <Fld label="Headline Text">
         <textarea value={data.text} onChange={e=>u("text",e.target.value)} placeholder="Your headline…" className="field-input" rows={3}/>
       </Fld>
+      <Fld label="Headline Link (optional)">
+        <input
+          type="url"
+          value={data.url||""}
+          onChange={e=>u("url",e.target.value)}
+          placeholder="https://yoursite.com"
+          className="field-input"
+          style={{borderColor:data.url&&data.url!=="https://"?"#86EFAC":undefined}}
+        />
+        {data.url&&data.url!=="https://"&&data.url!==""&&<p style={{marginTop:4,fontSize:11,color:"#16A34A"}}>✓ Headline link set — headline is clickable</p>}
+      </Fld>
       <DLabel>Typography</DLabel>
       <Fld label="Font Size">
         <Slider min={14} max={60} value={data.fontSize||28} onChange={v=>u("fontSize",v)} unit="px"/>
@@ -710,10 +721,15 @@ function BPrev({block,ff,isSelected,onUpdate}) {
 
     case "headline": return (
       <div style={{padding:"24px 32px 10px",fontFamily:ff}}>
-        {isSelected
-          ? <CE html={data.text} onChange={v=>u("text",v)} style={{fontSize:data.fontSize||28,fontWeight:data.fontWeight||"800",color:data.color||"#0f0f1a",textAlign:data.align||"left",lineHeight:1.25,margin:0}} tag="h1" plain/>
-          : <h1 style={{fontSize:data.fontSize||28,fontWeight:data.fontWeight||"800",color:data.color||"#0f0f1a",textAlign:data.align||"left",lineHeight:1.25,margin:0,fontFamily:"inherit"}}>{data.text||<span style={{color:"#C5B8AC",fontStyle:"italic",fontWeight:400,fontSize:18}}>Click to add headline…</span>}</h1>
-        }
+        {isSelected ? (
+          <CE html={data.text} onChange={v=>u("text",v)} style={{fontSize:data.fontSize||28,fontWeight:data.fontWeight||"800",color:data.color||"#0f0f1a",textAlign:data.align||"left",lineHeight:1.25,margin:0}} tag="h1" plain/>
+        ) : (() => {
+          const hasUrl = data.url && data.url !== "" && data.url !== "https://";
+          const headline = <h1 style={{fontSize:data.fontSize||28,fontWeight:data.fontWeight||"800",color:data.color||"#0f0f1a",textAlign:data.align||"left",lineHeight:1.25,margin:0,fontFamily:"inherit"}}>{data.text||<span style={{color:"#C5B8AC",fontStyle:"italic",fontWeight:400,fontSize:18}}>Click to add headline…</span>}</h1>;
+          return hasUrl
+            ? <a href={data.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block",textDecoration:"none"}}>{headline}</a>
+            : headline;
+        })()}
       </div>
     );
 
