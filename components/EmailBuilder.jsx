@@ -516,13 +516,14 @@ function BlockFields({block,onUpdate}) {
         </label>
       </Fld>
       <Fld label="Button Color">
-        <ColorRow value={data.bgColor||ACC} onChange={v=>u("bgColor",v)} swatches={PRESETS}/>
+        <ColorRow value={data.bgColor||ACC} onChange={v=>onUpdate({ bgColor:v, useAccentColor:false })} swatches={PRESETS}/>
+        {data.useAccentColor&&<p style={{marginTop:4,fontSize:11,color:"#D97706"}}>Choosing a custom color turns off accent inheritance.</p>}
       </Fld>
       <Fld label="Text Color">
         <ColorRow value={data.textColor||"#fff"} onChange={v=>u("textColor",v)} swatches={["#ffffff","#1A1D2E","#F4EFE9"]}/>
       </Fld>
       <Fld label="Border Color">
-        <ColorRow value={data.borderColor||data.bgColor||ACC} onChange={v=>u("borderColor",v)} swatches={PRESETS}/>
+        <ColorRow value={data.borderColor||data.bgColor||ACC} onChange={v=>onUpdate({ borderColor:v, useAccentColor:false })} swatches={PRESETS}/>
       </Fld>
       <Fld label="Border Width">
         <Slider min={0} max={6} value={data.borderWidth||0} onChange={v=>u("borderWidth",v)} unit="px"/>
@@ -760,10 +761,11 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
         {isSelected ? (
           <CE html={data.text} onChange={v=>u("text",v)} style={{fontSize:data.fontSize||28,fontWeight:data.fontWeight||"800",color:data.color||"#0f0f1a",textAlign:data.align||"left",lineHeight:1.25,margin:0}} tag="h1" plain/>
         ) : (() => {
-          const hasUrl = data.url && data.url !== "" && data.url !== "https://";
+          const href = normalizeLink(data.url);
+          const hasUrl = !!href;
           const headline = <h1 style={{fontSize:data.fontSize||28,fontWeight:data.fontWeight||"800",color:data.color||"#0f0f1a",textAlign:data.align||"left",lineHeight:1.25,margin:0,fontFamily:"inherit"}}>{data.text||<span style={{color:"#C5B8AC",fontStyle:"italic",fontWeight:400,fontSize:18}}>Click to add headline…</span>}</h1>;
           return hasUrl
-            ? <a href={data.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block",textDecoration:"none"}}>{headline}</a>
+            ? <a href={href} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block",textDecoration:"none"}}>{headline}</a>
             : headline;
         })()}
       </div>
@@ -787,8 +789,8 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
           </div>;
       return (
         <div style={{padding:"12px 32px",fontFamily:ff}}>
-          {data.link
-            ? <a href={data.link} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block"}}>{img}</a>
+          {normalizeLink(data.link)
+            ? <a href={normalizeLink(data.link)} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{display:"block"}}>{img}</a>
             : img}
           {data.caption&&<p style={{fontSize:12,color:"#9CA3AF",marginTop:6,textAlign:"center"}}>{data.caption}</p>}
         </div>
@@ -798,12 +800,13 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
     case "button": {
       const pad=data.size==="small"?"10px 20px":data.size==="large"?"16px 36px":"13px 28px";
       const fs=data.size==="small"?13:data.size==="large"?16:14.5;
-      const hasUrl=data.url&&data.url!==""&&data.url!=="https://";
+      const href = normalizeLink(data.url);
+      const hasUrl=!!href;
       const bg = data.useAccentColor ? (globalStyles?.accentColor||ACC) : (data.bgColor||ACC);
       const borderColor = data.useAccentColor ? (globalStyles?.accentColor||ACC) : (data.borderColor||data.bgColor||ACC);
       return (
         <div style={{padding:"12px 32px 20px",textAlign:data.align||"center",fontFamily:ff}}>
-          <a href={hasUrl?data.url:"#"} target={hasUrl?"_blank":undefined} rel="noopener noreferrer"
+          <a href={hasUrl?href:"#"} target={hasUrl?"_blank":undefined} rel="noopener noreferrer"
             onClick={e=>{if(!hasUrl)e.preventDefault();e.stopPropagation();}}
             style={{display:data.fullWidth?"block":"inline-block",background:bg,color:data.textColor||"#fff",padding:pad,borderRadius:data.radius||8,fontSize:fs,fontWeight:700,textDecoration:"none",textAlign:"center",letterSpacing:"0.01em",border:`${data.borderWidth||0}px solid ${borderColor}`}}>
             {data.text||"Click Here →"}
@@ -842,7 +845,7 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
       <div style={{padding:"16px 32px",background:data.bgColor||"#FAFAF9",borderTop:`1px solid ${BRD}`,textAlign:"center",fontFamily:ff}}>
         <p style={{fontSize:11.5,color:data.textColor||"#9CA3AF",margin:0,lineHeight:1.8}}>
           {data.text||"Your Company · Address"}<br/>
-          <a href={data.unsubUrl||"#"} onClick={e=>e.stopPropagation()} style={{color:data.textColor||"#9CA3AF",textDecoration:"underline"}}>{data.unsubText||"Unsubscribe"}</a>
+          <a href={normalizeLink(data.unsubUrl)||"#"} onClick={e=>e.stopPropagation()} style={{color:data.textColor||"#9CA3AF",textDecoration:"underline"}}>{data.unsubText||"Unsubscribe"}</a>
         </p>
       </div>
     );
@@ -903,4 +906,11 @@ function getContainerShadow(level) {
   if (level === "soft") return "0 2px 10px rgba(0,0,0,0.05)";
   if (level === "strong") return "0 12px 36px rgba(0,0,0,0.16)";
   return "0 4px 24px rgba(0,0,0,0.07)";
+}
+
+function normalizeLink(value) {
+  const raw = String(value || "").trim();
+  if (!raw || raw === "https://") return "";
+  if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw;
+  return `https://${raw.replace(/^\/+/, "")}`;
 }
