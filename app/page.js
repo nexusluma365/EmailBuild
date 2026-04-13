@@ -81,6 +81,8 @@ export default function HomePage() {
         onPublish={() => setActiveSection("send")}
         onPreview={handlePreview}
         onSave={handleSave}
+        onSignOut={() => signOut()}
+        onReconnect={() => signIn("google", { callbackUrl: "/" })}
       />
       <div style={{ display:"flex", flex:1, overflow:"hidden" }}>
         <IconRail activeSection={activeSection} setActiveSection={setActiveSection} onSignOut={() => signOut()}/>
@@ -104,7 +106,7 @@ export default function HomePage() {
 }
 
 /* ─── TOP BAR ─────────────────────────────────────────── */
-function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave }) {
+function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave, onSignOut, onReconnect }) {
   const sectionLabel = { builder:"Email Builder", subscribers:"Subscribers", send:"Send Campaign" };
   const ACC = "#D05A2C";
 
@@ -154,6 +156,16 @@ function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave 
         Send →
       </button>
 
+      {session?.authError && (
+        <button
+          onClick={onReconnect}
+          style={{ background:"#FDF3EE", color:ACC, border:`1px solid ${ACC}`, borderRadius:7, padding:"8px 12px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}
+          onMouseEnter={e=>e.currentTarget.style.background="#F9E4D8"}
+          onMouseLeave={e=>e.currentTarget.style.background="#FDF3EE"}>
+          Reconnect Google
+        </button>
+      )}
+
       {/* Avatar pill */}
       <div style={{ display:"flex", alignItems:"center", gap:7, padding:"4px 10px 4px 4px", background:"linear-gradient(135deg,#3730A3,#D05A2C)", borderRadius:99, cursor:"pointer" }}>
         <div style={{ width:26, height:26, borderRadius:"50%", background:"rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
@@ -163,6 +175,14 @@ function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave 
           {(session.user?.name||"User").split(" ")[0]}
         </span>
       </div>
+
+      <button
+        onClick={onSignOut}
+        style={{ background:"#fff", color:"#6B7280", border:"1px solid #E5E0DA", borderRadius:7, padding:"8px 12px", fontWeight:600, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}
+        onMouseEnter={e=>{ e.currentTarget.style.borderColor=ACC; e.currentTarget.style.color=ACC; e.currentTarget.style.background="#FDF3EE"; }}
+        onMouseLeave={e=>{ e.currentTarget.style.borderColor="#E5E0DA"; e.currentTarget.style.color="#6B7280"; e.currentTarget.style.background="#fff"; }}>
+        Sign Out
+      </button>
     </header>
   );
 }
