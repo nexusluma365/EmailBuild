@@ -1,14 +1,28 @@
-import { getServerSession } from "next-auth";
 import { getToken } from "next-auth/jwt";
-import { authOptions } from "@/lib/auth";
 import { sendGmailMessage } from "@/lib/gmail";
+import { refreshGoogleAccessToken } from "@/lib/auth";
+
+export const runtime = "nodejs";
 
 export async function POST(req) {
-  const session = await getServerSession(authOptions);
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  let token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-  if (!session || !token?.accessToken) {
-    return Response.json({ error: "Not authenticated. Please sign in." }, { status: 401 });
+  if (token?.accessToken && token?.expiresAt && Date.now() >= token.expiresAt * 1000) {
+    token = await refreshGoogleAccessToken(token);
+  }
+
+  if (!token?.accessToken) {
+    return Response.json(
+      { error: "No Google access token found. Please sign out and reconnect Google." },
+      { status: 401 }
+    );
+  }
+
+  if (token?.error === "RefreshAccessTokenError") {
+    return Response.json(
+      { error: "Google session expired. Please sign out and reconnect Google." },
+      { status: 401 }
+    );
   }
 
   let body;
@@ -21,7 +35,10 @@ export async function POST(req) {
   const { to, subject, html } = body;
 
   if (!to || !subject || !html) {
-    return Response.json({ error: "Missing required fields: to, subject, html." }, { status: 400 });
+    return Response.json(
+      { error: "Missing required fields: to, subject, html." },
+      { status: 400 }
+    );
   }
 
   try {
@@ -30,13 +47,16 @@ export async function POST(req) {
       to,
       subject,
       html,
-      fromName: session.user?.name || "",
-      fromEmail: session.user?.email || "",
+      fromName: token.name || "",
+      fromEmail: token.email || "",
     });
 
     return Response.json({ success: true, messageId: result.id });
   } catch (err) {
     console.error("Gmail send error:", err);
-    return Response.json({ error: err.message || "Failed to send email." }, { status: 500 });
+    return Response.json(
+      { error: err.message || "Failed to send email." },
+      { status: 500 }
+    );
   }
 }

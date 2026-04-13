@@ -231,7 +231,7 @@ function LandingPage({ onSignIn }) {
               <GoogleIcon/>
               Continue with Google
             </button>
-            <p style={{ fontSize:11.5, color:"#9CA3AF", marginTop:14, textAlign:"center", lineHeight:1.6 }}>Gmail send permissions only · Credentials never stored</p>
+            <p style={{ fontSize:11.5, color:"#9CA3AF", marginTop:14, textAlign:"center", lineHeight:1.6 }}>Gmail send permissions only · Connect Google to send securely</p>
           </div>
         </div>
         <p style={{ textAlign:"center", fontSize:11.5, color:"#9CA3AF", marginTop:14 }}>Email Studio · Next.js + Gmail API</p>
