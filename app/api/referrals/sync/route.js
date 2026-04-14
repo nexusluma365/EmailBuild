@@ -1,4 +1,3 @@
-import { getToken } from "next-auth/jwt";
 import { NextResponse } from "next/server";
 import { extractReferralRows, upsertContacts } from "@/lib/campaigns";
 
@@ -8,54 +7,44 @@ function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
 
-function dedupeRowsByEmail(rows = []) {
+function dedupeReferralRows(rows = []) {
   const map = new Map();
 
   for (const row of rows) {
-    const email = normalizeEmail(
-      row?.referralEmail || row?.email || row?.Email || row?.referral_email || ""
-    );
+    const referralEmail = normalizeEmail(row?.referralEmail || "");
 
-    if (!email) continue;
+    // only use Referral Email
+    if (!referralEmail) continue;
 
-    map.set(email, {
-      ...row,
-      referralEmail: email,
-      email,
-    });
+    if (!map.has(referralEmail)) {
+      map.set(referralEmail, {
+        referralFirstName: row?.referralFirstName || "",
+        referralLastName: row?.referralLastName || "",
+        referralEmail,
+        businessName: row?.businessName || "",
+      });
+    }
   }
 
   return Array.from(map.values());
 }
 
-async function getAuthorizedUserEmail(request) {
+function isAuthorized(request) {
   const authHeader = request.headers.get("authorization") || "";
   const expected = process.env.CRON_SECRET || "";
 
-  if (expected && authHeader === `Bearer ${expected}`) {
-    const ownerEmail = process.env.AUTOMATION_OWNER_EMAIL;
-    if (!ownerEmail) {
-      throw new Error("Missing AUTOMATION_OWNER_EMAIL");
-    }
-    return ownerEmail;
-  }
-
-  const token = await getToken({
-    req: request,
-    secret: process.env.NEXTAUTH_SECRET,
-  });
-
-  if (!token?.email) {
-    throw new Error("Unauthorized");
-  }
-
-  return token.email;
+  if (!expected) return false;
+  return authHeader === `Bearer ${expected}`;
 }
 
 export async function POST(request) {
   try {
+    if (!isAuthorized(request)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const referralSourceUrl = process.env.REFERRAL_SOURCE_URL;
-    const ownerEmail = await getAuthorizedUserEmail(request);
+    const ownerEmail = process.env.AUTOMATION_OWNER_EMAIL;
 
     if (!referralSourceUrl) {
       return NextResponse.json(
@@ -64,9 +53,15 @@ export async function POST(request) {
       );
     }
 
+    if (!ownerEmail) {
+      return NextResponse.json(
+        { error: "Missing AUTOMATION_OWNER_EMAIL" },
+        { status: 500 }
+      );
+    }
+
     const response = await fetch(referralSourceUrl, {
       method: "GET",
-      headers: { Accept: "application/json" },
       cache: "no-store",
     });
 
@@ -78,36 +73,24 @@ export async function POST(request) {
     }
 
     const payload = await response.json();
-    const extractedRows = extractReferralRows(payload);
-    const dedupedRows = dedupeRowsByEmail(extractedRows);
+    const rawRows = extractReferralRows(payload);
 
-    if (!dedupedRows.length) {
-      return NextResponse.json(
-        {
-          error:
-            "Referral source returned no rows. Your current Apps Script only writes data; it needs a read endpoint that returns rows as JSON.",
-        },
-        { status: 500 }
-      );
-    }
+    // only keep unique Referral Email rows
+    const dedupedRows = dedupeReferralRows(rawRows);
 
     const result = await upsertContacts(ownerEmail, dedupedRows, "referral");
 
     return NextResponse.json({
       success: true,
-      fetched: extractedRows.length,
-      deduped: dedupedRows.length,
+      fetched: rawRows.length,
+      dedupedReferralEmails: dedupedRows.length,
       imported: result.imported.length,
       totalProcessed: result.all.length,
     });
   } catch (error) {
     return NextResponse.json(
       { error: error?.message || "Referral sync failed" },
-      { status: error?.message === "Unauthorized" ? 401 : 500 }
+      { status: 500 }
     );
   }
-}
-
-export async function GET(request) {
-  return POST(request);
 }
