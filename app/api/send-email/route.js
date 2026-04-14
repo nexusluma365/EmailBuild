@@ -1,6 +1,6 @@
 import { getToken } from "next-auth/jwt";
 import { sendGmailMessage } from "@/lib/gmail";
-import { refreshGoogleAccessToken } from "@/lib/auth";
+import { refreshGoogleAccessToken } from "@/lib/googleAuth";
 
 export const runtime = "nodejs";
 

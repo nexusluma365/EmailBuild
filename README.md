@@ -11,6 +11,7 @@ Build and send beautiful HTML emails through your Gmail account. No third-party 
 - **Sends via Gmail API** — uses your own Google account
 - **Subscriber management** — add, search, import/export CSV
 - **Test + campaign sending** — one-by-one delivery with real-time status
+- **Campaign automation** — save drafts as campaigns, sync referral leads, auto-send on import with Supabase
 
 ---
 
@@ -141,6 +142,114 @@ NEXTAUTH_URL              = https://your-site.netlify.app
 | Email send  | Gmail API (REST)           |
 | Storage     | Browser localStorage       |
 | Deploy      | Netlify                    |
+
+## Campaigns + Supabase
+
+The app now supports a Supabase-backed campaign workflow:
+
+- Save the current draft as a persistent campaign
+- Store imported referral leads in Supabase
+- Enable automation so active campaigns send automatically after referral sync
+- Persist Google sender credentials in Supabase so automated sends can run outside the current browser session
+
+### Supabase setup
+
+1. Create a Supabase project
+2. Run [supabase/schema.sql](/Users/nexusluma/Downloads/email-studio-github-netlify-clean/supabase/schema.sql:1) in the SQL editor
+3. Add these env vars:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+REFERRAL_SOURCE_URL=https://your-referral-source.example.com/referrals
+CRON_SECRET=your_random_secret
+AUTOMATION_OWNER_EMAIL=you@example.com
+```
+
+### Important referral-source limitation
+
+Your current Google Apps Script can write referral rows and send emails, but it does **not** expose those rows for reading. This app's `/api/referrals/sync` route expects `REFERRAL_SOURCE_URL` to return JSON like:
+
+```json
+{
+  "referrals": [
+    {
+      "referralFirstName": "Jane",
+      "referralLastName": "Doe",
+      "referralEmail": "jane@example.com",
+      "businessName": "Acme Co"
+    }
+  ]
+}
+```
+
+### Minimal Apps Script read endpoint
+
+Add this to your Apps Script so the app can import referrals:
+
+```javascript
+function listReferralRows() {
+  var sheet = getSheet();
+  var values = sheet.getDataRange().getValues();
+  var headers = values.shift();
+
+  return values
+    .filter(function(row) { return row[3]; }) // Referral Email
+    .map(function(row) {
+      var item = {};
+      headers.forEach(function(header, index) {
+        item[header] = row[index];
+      });
+      return {
+        timestamp: item['Timestamp'],
+        referralFirstName: item['Referral First Name'],
+        referralLastName: item['Referral Last Name'],
+        referralEmail: item['Referral Email'],
+        businessName: item['Business Name'],
+        yourFirstName: item['Your First Name'],
+        yourLastName: item['Your Last Name'],
+        yourEmail: item['Your Email'],
+        paymentMethod: item['Payment Method'],
+        paymentDetails: item['Payment Details'],
+        status: item['Status']
+      };
+    });
+}
+
+function doGet(e) {
+  try {
+    if (e.parameter && e.parameter.action === 'referrals') {
+      return ContentService
+        .createTextOutput(JSON.stringify({ referrals: listReferralRows() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (e.parameter && e.parameter.data) {
+      var data = JSON.parse(decodeURIComponent(e.parameter.data));
+      writeRow(data);
+      sendReferralEmail(data);
+      sendConfirmationEmail(data);
+      return ContentService
+        .createTextOutput(JSON.stringify({ success: true, via: 'GET' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'Nexus Luma script is live.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+```
+
+Then set:
+
+```env
+REFERRAL_SOURCE_URL=https://script.google.com/macros/s/your-script-id/exec?action=referrals
+```
 
 ---
 
