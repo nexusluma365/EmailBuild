@@ -146,7 +146,9 @@ export default function Campaigns({ blocks, globalStyles }) {
       return;
     }
 
-    setMessage(`Imported ${data.importedCount} referral contacts into subscribers.`);
+    setMessage(
+      `Imported ${data.imported ?? data.importedCount ?? 0} referral contacts into subscribers.`
+    );
     loadCampaigns();
   }
 
@@ -215,6 +217,8 @@ export default function Campaigns({ blocks, globalStyles }) {
                 startAt: new Date().toISOString(),
               };
               const selectedIds = campaign.selected_contact_ids || [];
+              const hasAllSelected =
+                contacts.length > 0 && selectedIds.length === contacts.length;
               const selectedContacts =
                 campaign.recipient_mode === "selected"
                   ? selectedIds.map((id) => contactLookup.get(id)).filter(Boolean)
@@ -303,6 +307,37 @@ export default function Campaigns({ blocks, globalStyles }) {
 
                   {campaign.recipient_mode === "selected" && (
                     <div style={pickerBox}>
+                      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            patchCampaign(campaign.id, {
+                              recipient_mode: "selected",
+                              selected_contact_ids: contacts.map((contact) => contact.id),
+                            })
+                          }
+                          disabled={hasAllSelected}
+                          style={miniButton(hasAllSelected)}
+                        >
+                          Select all
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            patchCampaign(campaign.id, {
+                              recipient_mode: "selected",
+                              selected_contact_ids: [],
+                            })
+                          }
+                          disabled={selectedIds.length === 0}
+                          style={miniButton(selectedIds.length === 0)}
+                        >
+                          Clear
+                        </button>
+                        <span style={{ fontSize: 11.5, color: "#9CA3AF", marginLeft: "auto" }}>
+                          {selectedIds.length} selected
+                        </span>
+                      </div>
                       {contacts.map((contact) => {
                         const checked = selectedIds.includes(contact.id);
                         return (
@@ -329,6 +364,11 @@ export default function Campaigns({ blocks, globalStyles }) {
                       })}
                     </div>
                   )}
+
+                  <div style={{ fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.5, marginTop: 8 }}>
+                    Personalize campaign content with merge tags like
+                    {" "}{"{{first_name}}"}, {"{{full_name}}"}, {"{{email}}"}, and {"{{business_name}}"}.
+                  </div>
 
                   <SectionLabel>Schedule</SectionLabel>
                   <select
@@ -453,6 +493,20 @@ export default function Campaigns({ blocks, globalStyles }) {
       </div>
     </div>
   );
+}
+
+function miniButton(disabled) {
+  return {
+    padding: "6px 10px",
+    border: "1px solid #E5E0DA",
+    borderRadius: 6,
+    background: disabled ? "#FAFAF9" : "#fff",
+    color: disabled ? "#9CA3AF" : "#4B5563",
+    fontSize: 11.5,
+    fontWeight: 600,
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontFamily: "inherit",
+  };
 }
 
 function Toggle({ label, checked, onChange }) {

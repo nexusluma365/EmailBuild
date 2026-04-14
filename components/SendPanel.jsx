@@ -1,15 +1,17 @@
 "use client";
 import { useState, useEffect } from "react";
-import { buildEmailHtmlFromBlocks } from "@/lib/emailTemplate";
+import { buildEmailHtmlFromBlocks, personalizeText } from "@/lib/emailTemplate";
 
 export default function SendPanel({ blocks, globalStyles, session }) {
   const [subs, setSubs] = useState([]);
   const [mode, setMode] = useState("campaign");
+  const [audienceMode, setAudienceMode] = useState("all");
   const [testEmail, setTestEmail] = useState(session?.user?.email || "");
   const [results, setResults] = useState([]);
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [singleRecipientId, setSingleRecipientId] = useState("");
 
   useEffect(() => {
     fetch("/api/contacts")
@@ -26,12 +28,14 @@ export default function SendPanel({ blocks, globalStyles, session }) {
     blocks && blocks.some((b) => ["headline", "text", "image", "button", "columns"].includes(b.type));
   const isReady = subject && hasContent;
 
-  async function sendOne(to) {
-    const html = buildEmailHtmlFromBlocks(blocks || [], globalStyles || {});
+  async function sendOne(recipient) {
+    const to = recipient?.email || "";
+    const html = buildEmailHtmlFromBlocks(blocks || [], globalStyles || {}, recipient);
+    const personalizedSubject = personalizeText(subject, recipient);
     const res = await fetch("/api/send-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, html }),
+      body: JSON.stringify({ to, subject: personalizedSubject, html }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Unknown error");
@@ -47,7 +51,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
       setSending(true);
       setResults([{ email: testEmail, status: "sending" }]);
       try {
-        await sendOne(testEmail);
+        await sendOne({ email: testEmail });
         setResults([{ email: testEmail, status: "sent" }]);
       } catch (err) {
         setResults([{ email: testEmail, status: "error", message: err.message }]);
@@ -58,7 +62,11 @@ export default function SendPanel({ blocks, globalStyles, session }) {
     }
 
     const audience =
-      selectedIds.length > 0 ? subs.filter((sub) => selectedIds.includes(sub.id)) : subs;
+      audienceMode === "one"
+        ? subs.filter((sub) => sub.id === singleRecipientId)
+        : audienceMode === "selected"
+          ? subs.filter((sub) => selectedIds.includes(sub.id))
+          : subs;
     if (audience.length === 0) return;
 
     setSending(true);
@@ -70,7 +78,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
         prev.map((row) => (row.email === sub.email ? { ...row, status: "sending" } : row))
       );
       try {
-        await sendOne(sub.email);
+        await sendOne(sub);
         setResults((prev) =>
           prev.map((row) => (row.email === sub.email ? { ...row, status: "sent" } : row))
         );
@@ -95,6 +103,12 @@ export default function SendPanel({ blocks, globalStyles, session }) {
   const sentCount = results.filter((r) => r.status === "sent").length;
   const errorCount = results.filter((r) => r.status === "error").length;
   const ACC = "#D05A2C";
+  const selectedCount =
+    audienceMode === "one"
+      ? (singleRecipientId ? 1 : 0)
+      : audienceMode === "selected"
+        ? selectedIds.length
+        : subs.length;
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -166,50 +180,111 @@ export default function SendPanel({ blocks, globalStyles, session }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "#9CA3AF" }}>Subscribers</div>
                 <span style={{ fontSize: 11, background: "#FDF3EE", color: ACC, borderRadius: 20, padding: "2px 8px", fontWeight: 600 }}>
-                  {selectedIds.length || subs.length}
+                  {selectedCount}
                 </span>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12.5, color: "#4B5563" }}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.length === 0}
-                  onChange={() => setSelectedIds([])}
-                />
-                Send to all subscribers
-              </label>
-
-              <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #EDE9E4", borderRadius: 8, marginBottom: 12, background: "#FAFAF9" }}>
-                {subs.map((sub) => {
-                  const checked = selectedIds.length === 0 || selectedIds.includes(sub.id);
-                  return (
-                    <label key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid #F0EDE8", fontSize: 12 }}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          if (selectedIds.length === 0) {
-                            const allExcept = subs.filter((item) => item.id !== sub.id).map((item) => item.id);
-                            setSelectedIds(e.target.checked ? [] : allExcept);
-                            return;
-                          }
-                          setSelectedIds((prev) =>
-                            e.target.checked
-                              ? [...prev, sub.id]
-                              : prev.filter((id) => id !== sub.id)
-                          );
-                        }}
-                      />
-                      <span style={{ color: "#4B5563" }}>
-                        {sub.full_name || sub.email} <span style={{ color: "#9CA3AF" }}>({sub.email})</span>
-                      </span>
-                    </label>
-                  );
-                })}
+              <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4B5563" }}>
+                  <input
+                    type="radio"
+                    name="audience-mode"
+                    checked={audienceMode === "all"}
+                    onChange={() => setAudienceMode("all")}
+                  />
+                  Send to all subscribers
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4B5563" }}>
+                  <input
+                    type="radio"
+                    name="audience-mode"
+                    checked={audienceMode === "one"}
+                    onChange={() => setAudienceMode("one")}
+                  />
+                  Send to one checked recipient
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4B5563" }}>
+                  <input
+                    type="radio"
+                    name="audience-mode"
+                    checked={audienceMode === "selected"}
+                    onChange={() => setAudienceMode("selected")}
+                  />
+                  Send to selected recipients
+                </label>
               </div>
 
-              <SendBtn onClick={handleSend} disabled={!isReady || subs.length === 0 || sending} sending={sending}>
-                Send to {selectedIds.length || subs.length} Recipient{(selectedIds.length || subs.length) !== 1 ? "s" : ""}
+              {audienceMode === "one" && (
+                <select
+                  value={singleRecipientId}
+                  onChange={(e) => setSingleRecipientId(e.target.value)}
+                  className="field-input"
+                  style={{ marginBottom: 12 }}
+                >
+                  <option value="">Choose one recipient</option>
+                  {subs.map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.full_name || sub.email} ({sub.email})
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {audienceMode === "selected" && (
+                <>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds(subs.map((sub) => sub.id))}
+                      style={miniActionBtn}
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedIds([])}
+                      style={miniActionBtn}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #EDE9E4", borderRadius: 8, marginBottom: 12, background: "#FAFAF9" }}>
+                    {subs.map((sub) => {
+                      const checked = selectedIds.includes(sub.id);
+                      return (
+                        <label key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid #F0EDE8", fontSize: 12 }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => {
+                              setSelectedIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, sub.id]
+                                  : prev.filter((id) => id !== sub.id)
+                              );
+                            }}
+                          />
+                          <span style={{ color: "#4B5563" }}>
+                            {sub.full_name || sub.email} <span style={{ color: "#9CA3AF" }}>({sub.email})</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              <div style={{ marginBottom: 12, fontSize: 11.5, color: "#9CA3AF", lineHeight: 1.5 }}>
+                Use merge tags anywhere in your email content or subject:
+                {" "}{"{{first_name}}"}, {"{{last_name}}"}, {"{{full_name}}"}, {"{{email}}"}, {"{{business_name}}"}.
+              </div>
+
+              <SendBtn
+                onClick={handleSend}
+                disabled={!isReady || subs.length === 0 || selectedCount === 0 || sending}
+                sending={sending}
+              >
+                Send to {selectedCount} Recipient{selectedCount !== 1 ? "s" : ""}
               </SendBtn>
             </>
           )}
@@ -264,6 +339,18 @@ export default function SendPanel({ blocks, globalStyles, session }) {
     </div>
   );
 }
+
+const miniActionBtn = {
+  padding: "7px 10px",
+  borderRadius: 6,
+  border: "1px solid #E5E0DA",
+  background: "#fff",
+  color: "#4B5563",
+  fontSize: 11.5,
+  fontWeight: 600,
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
 
 function SendBtn({ onClick, disabled, sending, children }) {
   const ACC = "#D05A2C";

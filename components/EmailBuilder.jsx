@@ -910,7 +910,8 @@ function getContainerShadow(level) {
 
 function normalizeLink(value) {
   const raw = String(value || "").trim();
-  if (!raw || raw === "https://") return "";
+  if (!raw || raw === "https://" || raw === "#") return "";
   if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw;
+  if (/^(javascript:|data:)/i.test(raw)) return "";
   return `https://${raw.replace(/^\/+/, "")}`;
 }
