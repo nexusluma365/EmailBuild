@@ -1,6 +1,5 @@
 import { getToken } from "next-auth/jwt";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import { getCampaignContacts, sendCampaignToContacts } from "@/lib/campaigns";
 
 async function requireUserEmail(req) {
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
@@ -10,22 +9,21 @@ async function requireUserEmail(req) {
   return token.email;
 }
 
-export async function POST(req, { params }) {
+export async function DELETE(req, { params }) {
   try {
     const userEmail = await requireUserEmail(req);
     const supabase = getSupabaseAdmin();
-    const { data: campaign, error: campaignError } = await supabase
-      .from("campaigns")
-      .select("*")
+    const { error } = await supabase
+      .from("contacts")
+      .update({
+        status: "archived",
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", params.id)
-      .eq("owner_email", userEmail)
-      .single();
+      .eq("owner_email", userEmail);
 
-    if (campaignError) throw campaignError;
-
-    const contacts = await getCampaignContacts(campaign);
-    const results = await sendCampaignToContacts(campaign, contacts);
-    return Response.json({ results });
+    if (error) throw error;
+    return Response.json({ success: true });
   } catch (error) {
     const status = error.message === "Unauthorized" ? 401 : 500;
     return Response.json({ error: error.message }, { status });

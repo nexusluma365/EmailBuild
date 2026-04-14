@@ -1,4 +1,5 @@
 import { getToken } from "next-auth/jwt";
+import { computeNextRunAt, normalizeScheduleConfig } from "@/lib/campaigns";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function requireUserEmail(req) {
@@ -25,14 +26,39 @@ export async function PATCH(req, { params }) {
       "blocks",
       "global_styles",
       "status",
-      "automation_enabled",
-      "auto_send_on_import",
       "audience_source",
+      "recipient_mode",
+      "selected_contact_ids",
+      "schedule_enabled",
       "last_synced_at",
     ];
 
     for (const key of allowed) {
       if (body[key] !== undefined) patch[key] = body[key];
+    }
+
+    if (body.scheduleConfig !== undefined || body.schedule_config !== undefined) {
+      patch.schedule_config = normalizeScheduleConfig(
+        body.scheduleConfig || body.schedule_config || {}
+      );
+    }
+
+    const nextRunSeedConfig =
+      patch.schedule_config || body.scheduleConfig || body.schedule_config;
+    const scheduleEnabled =
+      patch.schedule_enabled !== undefined
+        ? patch.schedule_enabled
+        : body.scheduleEnabled !== undefined
+          ? body.scheduleEnabled
+          : undefined;
+
+    if (scheduleEnabled !== undefined) {
+      patch.schedule_enabled = Boolean(scheduleEnabled);
+      patch.next_run_at = patch.schedule_enabled
+        ? computeNextRunAt(nextRunSeedConfig || {}, new Date())
+        : null;
+    } else if (patch.schedule_config) {
+      patch.next_run_at = computeNextRunAt(patch.schedule_config, new Date());
     }
 
     const { data, error } = await supabase

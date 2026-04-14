@@ -11,7 +11,7 @@ Build and send beautiful HTML emails through your Gmail account. No third-party 
 - **Sends via Gmail API** — uses your own Google account
 - **Subscriber management** — add, search, import/export CSV
 - **Test + campaign sending** — one-by-one delivery with real-time status
-- **Campaign automation** — save drafts as campaigns, sync referral leads, auto-send on import with Supabase
+- **Recurring campaigns** — save drafts as campaigns, choose all or selected subscribers, and schedule recurring sends with Supabase-backed storage
 
 ---
 
@@ -148,8 +148,9 @@ NEXTAUTH_URL              = https://your-site.netlify.app
 The app now supports a Supabase-backed campaign workflow:
 
 - Save the current draft as a persistent campaign
-- Store imported referral leads in Supabase
-- Enable automation so active campaigns send automatically after referral sync
+- Store subscribers and imported referral leads in Supabase
+- Choose campaign recipients: all subscribers or selected subscribers
+- Schedule recurring sends: every N hours, daily, weekly, or twice weekly
 - Persist Google sender credentials in Supabase so automated sends can run outside the current browser session
 
 ### Supabase setup
@@ -166,9 +167,20 @@ CRON_SECRET=your_random_secret
 AUTOMATION_OWNER_EMAIL=you@example.com
 ```
 
+### Running recurring campaigns
+
+Recurring campaigns require an external scheduler to call:
+
+```bash
+POST /api/campaigns/run-due
+Authorization: Bearer $CRON_SECRET
+```
+
+That route checks for active campaigns whose `next_run_at` is due and sends them using the stored Google connection.
+
 ### Important referral-source limitation
 
-Your current Google Apps Script can write referral rows and send emails, but it does **not** expose those rows for reading. This app's `/api/referrals/sync` route expects `REFERRAL_SOURCE_URL` to return JSON like:
+Your current Google Apps Script can write referral rows and send emails, but it does **not** expose those rows for reading. This app's `/api/referrals/sync` route imports those rows into the subscriber store and expects `REFERRAL_SOURCE_URL` to return JSON like:
 
 ```json
 {

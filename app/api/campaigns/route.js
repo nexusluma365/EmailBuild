@@ -1,4 +1,5 @@
 import { getToken } from "next-auth/jwt";
+import { computeNextRunAt, normalizeScheduleConfig } from "@/lib/campaigns";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function requireUserEmail(req) {
@@ -40,9 +41,14 @@ export async function POST(req) {
       blocks: body.blocks || [],
       global_styles: body.global_styles || body.globalStyles || {},
       status: body.status || "draft",
-      audience_source: body.audienceSource || "referrals",
-      automation_enabled: Boolean(body.automationEnabled),
-      auto_send_on_import: Boolean(body.autoSendOnImport),
+      audience_source: "contacts",
+      recipient_mode: body.recipientMode || "all",
+      selected_contact_ids: body.selectedContactIds || [],
+      schedule_enabled: Boolean(body.scheduleEnabled),
+      schedule_config: normalizeScheduleConfig(body.scheduleConfig || {}),
+      next_run_at: body.scheduleEnabled
+        ? computeNextRunAt(body.scheduleConfig || {}, new Date())
+        : null,
       updated_at: new Date().toISOString(),
     };
 

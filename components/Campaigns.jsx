@@ -1,9 +1,28 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const SCHEDULE_PRESETS = [
+  { id: "manual", label: "Manual only" },
+  { id: "hourly_interval", label: "Custom hours" },
+  { id: "daily", label: "Daily" },
+  { id: "weekly", label: "Weekly" },
+  { id: "twice_weekly", label: "Twice a week" },
+];
+
+const WEEKDAYS = [
+  { value: 0, label: "Sun" },
+  { value: 1, label: "Mon" },
+  { value: 2, label: "Tue" },
+  { value: 3, label: "Wed" },
+  { value: 4, label: "Thu" },
+  { value: 5, label: "Fri" },
+  { value: 6, label: "Sat" },
+];
 
 export default function Campaigns({ blocks, globalStyles }) {
   const [campaigns, setCampaigns] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
@@ -15,13 +34,21 @@ export default function Campaigns({ blocks, globalStyles }) {
 
   async function loadCampaigns() {
     setLoading(true);
-    const res = await fetch("/api/campaigns");
-    const data = await res.json();
-    if (res.ok) {
-      setCampaigns(data.campaigns || []);
-    } else {
-      setMessage(data.error || "Failed to load campaigns.");
-    }
+    const [campaignRes, contactRes] = await Promise.all([
+      fetch("/api/campaigns"),
+      fetch("/api/contacts"),
+    ]);
+    const [campaignData, contactData] = await Promise.all([
+      campaignRes.json(),
+      contactRes.json(),
+    ]);
+
+    if (campaignRes.ok) setCampaigns(campaignData.campaigns || []);
+    else setMessage(campaignData.error || "Failed to load campaigns.");
+
+    if (contactRes.ok) setContacts(contactData.contacts || []);
+    else setMessage(contactData.error || "Failed to load subscribers.");
+
     setLoading(false);
   }
 
@@ -36,6 +63,12 @@ export default function Campaigns({ blocks, globalStyles }) {
     }
 
     setBusyId("create");
+    const scheduleConfig = {
+      frequency: "manual",
+      intervalHours: 24,
+      weeklyDays: [1],
+      startAt: new Date().toISOString(),
+    };
     const res = await fetch("/api/campaigns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -45,7 +78,10 @@ export default function Campaigns({ blocks, globalStyles }) {
         blocks,
         globalStyles,
         status: "draft",
-        audienceSource: "referrals",
+        recipientMode: "all",
+        selectedContactIds: [],
+        scheduleEnabled: false,
+        scheduleConfig,
       }),
     });
     const data = await res.json();
@@ -79,16 +115,12 @@ export default function Campaigns({ blocks, globalStyles }) {
     setCampaigns((prev) =>
       prev.map((campaign) => (campaign.id === id ? data.campaign : campaign))
     );
-    setMessage(successMessage);
+    if (successMessage) setMessage(successMessage);
   }
 
   async function sendCampaign(id) {
     setBusyId(`send:${id}`);
-    const res = await fetch(`/api/campaigns/${id}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ onlyNewReferrals: true }),
-    });
+    const res = await fetch(`/api/campaigns/${id}/send`, { method: "POST" });
     const data = await res.json();
     setBusyId("");
 
@@ -114,22 +146,14 @@ export default function Campaigns({ blocks, globalStyles }) {
       return;
     }
 
-    const automated = (data.automation || [])
-      .map(
-        (row) =>
-          `${row.campaignName}: ${
-            row.results.filter((result) => result.status === "sent").length
-          } sent`
-      )
-      .join(" · ");
-
-    setMessage(
-      automated
-        ? `Imported ${data.importedCount} referral contacts. Auto-send results: ${automated}`
-        : `Imported ${data.importedCount} referral contacts.`
-    );
+    setMessage(`Imported ${data.importedCount} referral contacts into subscribers.`);
     loadCampaigns();
   }
+
+  const contactLookup = useMemo(
+    () => new Map(contacts.map((contact) => [contact.id, contact])),
+    [contacts]
+  );
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
@@ -160,159 +184,270 @@ export default function Campaigns({ blocks, globalStyles }) {
           {busyId === "create" ? "Creating…" : "Save Current Draft as Campaign"}
         </button>
 
-        <SectionLabel>Referral Sync</SectionLabel>
+        <SectionLabel>Subscriber Sources</SectionLabel>
         <p style={smallText}>
-          Pull referral contacts from your external source and import them into
-          Supabase.
+          Subscribers are stored in Supabase. You can also import referrals into
+          the subscriber store.
         </p>
         <button
           onClick={syncReferrals}
           disabled={busyId === "sync"}
           style={secondaryButton(busyId === "sync")}
         >
-          {busyId === "sync" ? "Syncing…" : "Sync Referrals Now"}
+          {busyId === "sync" ? "Importing…" : "Import Referrals into Subscribers"}
         </button>
 
-        {message && (
-          <div
-            style={{
-              marginTop: 12,
-              padding: "10px 12px",
-              background: "#FAFAF9",
-              border: "1px solid #E5E0DA",
-              borderRadius: 8,
-              fontSize: 12,
-              color: "#4B5563",
-              lineHeight: 1.5,
-            }}
-          >
-            {message}
-          </div>
-        )}
+        {message && <div style={messageBox}>{message}</div>}
       </div>
 
       <div className="canvas-bg" style={{ flex: 1, overflowY: "auto", padding: 20 }}>
         {loading ? (
           <div style={emptyState}>Loading campaigns…</div>
         ) : campaigns.length === 0 ? (
-          <div style={emptyState}>
-            No campaigns yet. Build an email in the Builder tab, then save it
-            here.
-          </div>
+          <div style={emptyState}>No campaigns yet. Save a builder draft here first.</div>
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
-            {campaigns.map((campaign) => (
-              <div
-                key={campaign.id}
-                style={{
-                  background: "#fff",
-                  border: "1px solid #E5E0DA",
-                  borderRadius: 12,
-                  padding: 16,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    marginBottom: 12,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: "#1A1D2E" }}>
-                      {campaign.name}
+            {campaigns.map((campaign) => {
+              const schedule = campaign.schedule_config || {
+                frequency: "manual",
+                intervalHours: 24,
+                weeklyDays: [1],
+                startAt: new Date().toISOString(),
+              };
+              const selectedIds = campaign.selected_contact_ids || [];
+              const selectedContacts =
+                campaign.recipient_mode === "selected"
+                  ? selectedIds.map((id) => contactLookup.get(id)).filter(Boolean)
+                  : contacts;
+
+              return (
+                <div key={campaign.id} style={card}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "#1A1D2E" }}>
+                        {campaign.name}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
+                        Subject: {campaign.subject || "—"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 4 }}>
+                        Status: {campaign.status} · Next run:{" "}
+                        {campaign.next_run_at
+                          ? new Date(campaign.next_run_at).toLocaleString()
+                          : "Not scheduled"}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
-                      Subject: {campaign.subject || "—"}
-                    </div>
-                    <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 4 }}>
-                      Status: {campaign.status} · Last sync:{" "}
-                      {campaign.last_synced_at
-                        ? new Date(campaign.last_synced_at).toLocaleString()
-                        : "Never"}
-                    </div>
+                    <button
+                      onClick={() =>
+                        patchCampaign(
+                          campaign.id,
+                          {
+                            blocks,
+                            global_styles: globalStyles,
+                            subject,
+                          },
+                          "Campaign content updated from the current draft."
+                        )
+                      }
+                      disabled={!hasDraft || busyId === campaign.id}
+                      style={secondaryButton(!hasDraft || busyId === campaign.id)}
+                    >
+                      Use Current Draft
+                    </button>
                   </div>
-                  <button
-                    onClick={() =>
-                      patchCampaign(
-                        campaign.id,
-                        {
-                          blocks,
-                          global_styles: globalStyles,
-                          subject,
-                        },
-                        "Campaign content updated from the current draft."
-                      )
-                    }
-                    disabled={!hasDraft || busyId === campaign.id}
-                    style={secondaryButton(!hasDraft || busyId === campaign.id)}
-                  >
-                    Use Current Draft
-                  </button>
-                </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 16,
-                    flexWrap: "wrap",
-                    marginBottom: 14,
-                  }}
-                >
-                  <Toggle
-                    label="Active"
-                    checked={campaign.status === "active"}
-                    onChange={(checked) =>
-                      patchCampaign(
-                        campaign.id,
-                        { status: checked ? "active" : "draft" },
-                        checked ? "Campaign activated." : "Campaign set back to draft."
-                      )
-                    }
-                  />
-                  <Toggle
-                    label="Automation"
-                    checked={campaign.automation_enabled}
-                    onChange={(checked) =>
-                      patchCampaign(
-                        campaign.id,
-                        { automation_enabled: checked },
-                        checked ? "Automation enabled." : "Automation disabled."
-                      )
-                    }
-                  />
-                  <Toggle
-                    label="Auto-send on import"
-                    checked={campaign.auto_send_on_import}
-                    onChange={(checked) =>
-                      patchCampaign(
-                        campaign.id,
-                        { auto_send_on_import: checked },
-                        checked
-                          ? "Campaign will send after referral sync."
-                          : "Campaign will no longer auto-send after sync."
-                      )
-                    }
-                  />
-                </div>
+                  <div style={sectionRow}>
+                    <Toggle
+                      label="Active"
+                      checked={campaign.status === "active"}
+                      onChange={(checked) =>
+                        patchCampaign(campaign.id, {
+                          status: checked ? "active" : "draft",
+                        })
+                      }
+                    />
+                    <Toggle
+                      label="Scheduled"
+                      checked={campaign.schedule_enabled}
+                      onChange={(checked) =>
+                        patchCampaign(campaign.id, {
+                          schedule_enabled: checked,
+                          scheduleConfig: schedule,
+                        })
+                      }
+                    />
+                  </div>
 
-                <button
-                  onClick={() => sendCampaign(campaign.id)}
-                  disabled={
-                    busyId === `send:${campaign.id}` || campaign.status !== "active"
-                  }
-                  style={primaryButton(
-                    busyId === `send:${campaign.id}` || campaign.status !== "active"
+                  <SectionLabel>Audience</SectionLabel>
+                  <div style={sectionRow}>
+                    <Toggle
+                      label="All subscribers"
+                      checked={campaign.recipient_mode !== "selected"}
+                      onChange={() =>
+                        patchCampaign(campaign.id, {
+                          recipient_mode: "all",
+                          selected_contact_ids: [],
+                        })
+                      }
+                    />
+                    <Toggle
+                      label="Select subscribers"
+                      checked={campaign.recipient_mode === "selected"}
+                      onChange={(checked) =>
+                        patchCampaign(campaign.id, {
+                          recipient_mode: checked ? "selected" : "all",
+                        })
+                      }
+                    />
+                  </div>
+
+                  {campaign.recipient_mode === "selected" && (
+                    <div style={pickerBox}>
+                      {contacts.map((contact) => {
+                        const checked = selectedIds.includes(contact.id);
+                        return (
+                          <label key={contact.id} style={contactRow}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const next = e.target.checked
+                                  ? [...selectedIds, contact.id]
+                                  : selectedIds.filter((id) => id !== contact.id);
+                                patchCampaign(campaign.id, {
+                                  recipient_mode: "selected",
+                                  selected_contact_ids: next,
+                                });
+                              }}
+                            />
+                            <span>
+                              {contact.full_name || contact.email}{" "}
+                              <span style={{ color: "#9CA3AF" }}>({contact.email})</span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   )}
-                >
-                  {busyId === `send:${campaign.id}`
-                    ? "Sending…"
-                    : "Send Campaign to Referral Contacts"}
-                </button>
-              </div>
-            ))}
+
+                  <SectionLabel>Schedule</SectionLabel>
+                  <select
+                    value={schedule.frequency}
+                    onChange={(e) =>
+                      patchCampaign(campaign.id, {
+                        schedule_enabled: e.target.value !== "manual",
+                        scheduleConfig: {
+                          ...schedule,
+                          frequency: e.target.value,
+                          weeklyDays:
+                            e.target.value === "twice_weekly"
+                              ? [1, 4]
+                              : e.target.value === "weekly"
+                                ? [1]
+                                : schedule.weeklyDays,
+                        },
+                      })
+                    }
+                    className="field-input"
+                    style={{ marginBottom: 8 }}
+                  >
+                    {SCHEDULE_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {schedule.frequency === "hourly_interval" && (
+                    <input
+                      type="number"
+                      min="1"
+                      value={schedule.intervalHours || 24}
+                      onChange={(e) =>
+                        patchCampaign(campaign.id, {
+                          schedule_enabled: true,
+                          scheduleConfig: {
+                            ...schedule,
+                            frequency: "hourly_interval",
+                            intervalHours: Number(e.target.value || 1),
+                          },
+                        })
+                      }
+                      className="field-input"
+                      style={{ marginBottom: 8 }}
+                    />
+                  )}
+
+                  {(schedule.frequency === "weekly" ||
+                    schedule.frequency === "twice_weekly") && (
+                    <div style={weekdayGrid}>
+                      {WEEKDAYS.map((day) => {
+                        const checked = (schedule.weeklyDays || []).includes(day.value);
+                        return (
+                          <label key={day.value} style={weekdayPill(checked)}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              style={{ display: "none" }}
+                              onChange={(e) => {
+                                let nextDays = e.target.checked
+                                  ? [...(schedule.weeklyDays || []), day.value]
+                                  : (schedule.weeklyDays || []).filter((value) => value !== day.value);
+                                nextDays = [...new Set(nextDays)].sort((a, b) => a - b);
+                                patchCampaign(campaign.id, {
+                                  schedule_enabled: true,
+                                  scheduleConfig: {
+                                    ...schedule,
+                                    weeklyDays: nextDays,
+                                  },
+                                });
+                              }}
+                            />
+                            {day.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {schedule.frequency !== "manual" && (
+                    <input
+                      type="datetime-local"
+                      value={toDateTimeLocal(schedule.startAt)}
+                      onChange={(e) =>
+                        patchCampaign(campaign.id, {
+                          schedule_enabled: true,
+                          scheduleConfig: {
+                            ...schedule,
+                            startAt: new Date(e.target.value).toISOString(),
+                          },
+                        })
+                      }
+                      className="field-input"
+                      style={{ marginTop: 8 }}
+                    />
+                  )}
+
+                  <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
+                    <button
+                      onClick={() => sendCampaign(campaign.id)}
+                      disabled={
+                        busyId === `send:${campaign.id}` ||
+                        campaign.status !== "active" ||
+                        selectedContacts.length === 0
+                      }
+                      style={primaryButton(
+                        busyId === `send:${campaign.id}` ||
+                          campaign.status !== "active" ||
+                          selectedContacts.length === 0
+                      )}
+                    >
+                      {busyId === `send:${campaign.id}` ? "Sending…" : `Send Now to ${selectedContacts.length}`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -322,20 +457,8 @@ export default function Campaigns({ blocks, globalStyles }) {
 
 function Toggle({ label, checked, onChange }) {
   return (
-    <label
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        fontSize: 12.5,
-        color: "#4B5563",
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
+    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4B5563" }}>
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
   );
@@ -343,17 +466,7 @@ function Toggle({ label, checked, onChange }) {
 
 function SectionLabel({ children }) {
   return (
-    <div
-      style={{
-        fontSize: 10.5,
-        fontWeight: 700,
-        textTransform: "uppercase",
-        letterSpacing: "0.07em",
-        color: "#9CA3AF",
-        marginBottom: 8,
-        marginTop: 4,
-      }}
-    >
+    <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#9CA3AF", marginBottom: 8, marginTop: 4 }}>
       {children}
     </div>
   );
@@ -361,7 +474,6 @@ function SectionLabel({ children }) {
 
 function primaryButton(disabled) {
   return {
-    width: "100%",
     padding: "9px 12px",
     border: "none",
     borderRadius: 7,
@@ -371,12 +483,12 @@ function primaryButton(disabled) {
     fontWeight: 600,
     cursor: disabled ? "not-allowed" : "pointer",
     fontFamily: "inherit",
+    width: "100%",
   };
 }
 
 function secondaryButton(disabled) {
   return {
-    width: "100%",
     padding: "9px 12px",
     border: "1px solid #E5E0DA",
     borderRadius: 7,
@@ -386,7 +498,14 @@ function secondaryButton(disabled) {
     fontWeight: 600,
     cursor: disabled ? "not-allowed" : "pointer",
     fontFamily: "inherit",
+    width: "100%",
   };
+}
+
+function toDateTimeLocal(value) {
+  const date = value ? new Date(value) : new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const smallText = {
@@ -394,6 +513,17 @@ const smallText = {
   color: "#6B7280",
   lineHeight: 1.55,
   marginBottom: 10,
+};
+
+const messageBox = {
+  marginTop: 12,
+  padding: "10px 12px",
+  background: "#FAFAF9",
+  border: "1px solid #E5E0DA",
+  borderRadius: 8,
+  fontSize: 12,
+  color: "#4B5563",
+  lineHeight: 1.5,
 };
 
 const emptyState = {
@@ -406,3 +536,55 @@ const emptyState = {
   fontSize: 13,
   padding: 24,
 };
+
+const card = {
+  background: "#fff",
+  border: "1px solid #E5E0DA",
+  borderRadius: 12,
+  padding: 16,
+};
+
+const sectionRow = {
+  display: "flex",
+  gap: 16,
+  flexWrap: "wrap",
+  marginBottom: 14,
+};
+
+const pickerBox = {
+  maxHeight: 180,
+  overflowY: "auto",
+  border: "1px solid #E5E0DA",
+  borderRadius: 8,
+  padding: 8,
+  marginBottom: 14,
+};
+
+const contactRow = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "6px 4px",
+  fontSize: 12.5,
+  color: "#4B5563",
+};
+
+const weekdayGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+  gap: 6,
+  marginBottom: 8,
+};
+
+function weekdayPill(active) {
+  return {
+    padding: "8px 0",
+    textAlign: "center",
+    borderRadius: 8,
+    border: `1px solid ${active ? "#D05A2C" : "#E5E0DA"}`,
+    background: active ? "#FDF3EE" : "#fff",
+    color: active ? "#D05A2C" : "#6B7280",
+    fontSize: 12,
+    cursor: "pointer",
+  };
+}

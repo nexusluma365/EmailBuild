@@ -1,9 +1,5 @@
 import { getToken } from "next-auth/jwt";
-import {
-  extractReferralRows,
-  sendCampaignToContacts,
-  upsertReferralContacts,
-} from "@/lib/campaigns";
+import { extractReferralRows, upsertContacts } from "@/lib/campaigns";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function getAuthorizedUserEmail(req) {
@@ -46,7 +42,6 @@ async function fetchReferralPayload() {
 
 async function runSync(req) {
   const userEmail = await getAuthorizedUserEmail(req);
-  const supabase = getSupabaseAdmin();
   const payload = await fetchReferralPayload();
   const rows = extractReferralRows(payload);
 
@@ -56,40 +51,8 @@ async function runSync(req) {
     );
   }
 
-  const { imported } = await upsertReferralContacts(userEmail, rows);
-
-  const { data: campaigns, error } = await supabase
-    .from("campaigns")
-    .select("*")
-    .eq("owner_email", userEmail)
-    .eq("automation_enabled", true)
-    .eq("auto_send_on_import", true)
-    .eq("status", "active");
-
-  if (error) throw error;
-
-  const automation = [];
-  for (const campaign of campaigns || []) {
-    const results = imported.length
-      ? await sendCampaignToContacts(campaign, imported)
-      : [];
-
-    await supabase
-      .from("campaigns")
-      .update({
-        last_synced_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", campaign.id);
-
-    automation.push({
-      campaignId: campaign.id,
-      campaignName: campaign.name,
-      results,
-    });
-  }
-
-  return { importedCount: imported.length, automation };
+  const { imported } = await upsertContacts(userEmail, rows, "referral");
+  return { importedCount: imported.length };
 }
 
 export async function POST(req) {
