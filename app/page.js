@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signIn, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import EmailBuilder from "@/components/EmailBuilder";
 import Subscribers from "@/components/Subscribers";
 import SendPanel from "@/components/SendPanel";
@@ -9,6 +9,9 @@ import Campaigns from "@/components/Campaigns";
 import { buildEmailHtmlFromBlocks } from "@/lib/emailTemplate";
 
 const DRAFTS_KEY = "email_studio_drafts_v1";
+const DRAFTS_DB_NAME = "email_studio_drafts_db";
+const DRAFTS_STORE = "drafts";
+const DRAFTS_RECORD_ID = "drafts";
 const MAX_DRAFTS = 5;
 const makeDraftId = () => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -31,6 +34,75 @@ function formatDraftDate(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function safeSetLocalStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    console.warn(`Could not save ${key} to localStorage:`, error);
+    return false;
+  }
+}
+
+function openDraftDatabase() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB is not available."));
+      return;
+    }
+
+    const request = indexedDB.open(DRAFTS_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(DRAFTS_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readDraftsFromStorage() {
+  try {
+    const db = await openDraftDatabase();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(DRAFTS_STORE, "readonly");
+      const request = tx.objectStore(DRAFTS_STORE).get(DRAFTS_RECORD_ID);
+      request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
+      request.onerror = () => reject(request.error);
+      tx.oncomplete = () => db.close();
+    });
+  } catch {
+    try {
+      const saved = JSON.parse(localStorage.getItem(DRAFTS_KEY) || "[]");
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  }
+}
+
+async function writeDraftsToStorage(drafts) {
+  try {
+    const db = await openDraftDatabase();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(DRAFTS_STORE, "readwrite");
+      tx.objectStore(DRAFTS_STORE).put(drafts, DRAFTS_RECORD_ID);
+      tx.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (error) {
+    console.warn("Could not save drafts to IndexedDB:", error);
+  }
+
+  const lightweight = drafts.map(({ blocks, ...draft }) => ({
+    ...draft,
+    blockCount: blocks?.length || 0,
+  }));
+  safeSetLocalStorage(DRAFTS_KEY, JSON.stringify(lightweight));
 }
 
 const DEFAULT_STYLES = {
@@ -58,6 +130,12 @@ export default function HomePage() {
     }
     return [];
   });
+
+  useEffect(() => {
+    readDraftsFromStorage().then((storedDrafts) => {
+      if (storedDrafts.length) setDrafts(storedDrafts.slice(0, MAX_DRAFTS));
+    });
+  }, []);
 
   // null = show template picker; populated = email blocks array
   const [blocks, setBlocks] = useState(() => {
@@ -92,9 +170,9 @@ export default function HomePage() {
 
   const subject = blocks?.find(b => b.type === "subject")?.data?.text || "";
 
-  const persistDrafts = (nextDrafts) => {
+  const persistDrafts = async (nextDrafts) => {
     setDrafts(nextDrafts);
-    localStorage.setItem(DRAFTS_KEY, JSON.stringify(nextDrafts));
+    await writeDraftsToStorage(nextDrafts);
   };
 
   const showToast = (message) => {
@@ -105,7 +183,7 @@ export default function HomePage() {
     setTimeout(() => { toast.style.opacity="0"; setTimeout(() => toast.remove(), 300); }, 2000);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
       if (!blocks || blocks.length === 0) {
         alert("Create an email before saving a draft.");
@@ -151,9 +229,9 @@ export default function HomePage() {
         setActiveDraftId(newDraft.id);
       }
 
-      persistDrafts(nextDrafts);
-      if (blocks) localStorage.setItem("email_studio_blocks_v2", JSON.stringify(blocks));
-      localStorage.setItem("email_studio_styles_v2", JSON.stringify(globalStyles));
+      await persistDrafts(nextDrafts);
+      if (blocks) safeSetLocalStorage("email_studio_blocks_v2", JSON.stringify(blocks));
+      safeSetLocalStorage("email_studio_styles_v2", JSON.stringify(globalStyles));
       showToast("Draft saved");
     } catch(e) {
       alert("Could not save draft.");
@@ -164,17 +242,17 @@ export default function HomePage() {
     setBlocks(cloneBlocks(draft.blocks || []));
     setGlobalStyles({ ...DEFAULT_STYLES, ...(draft.globalStyles || {}) });
     setActiveDraftId(draft.id);
-    localStorage.setItem("email_studio_blocks_v2", JSON.stringify(draft.blocks || []));
-    localStorage.setItem("email_studio_styles_v2", JSON.stringify(draft.globalStyles || DEFAULT_STYLES));
+    safeSetLocalStorage("email_studio_blocks_v2", JSON.stringify(draft.blocks || []));
+    safeSetLocalStorage("email_studio_styles_v2", JSON.stringify(draft.globalStyles || DEFAULT_STYLES));
     setActiveSection("builder");
     showToast("Draft opened");
   };
 
-  const deleteDraft = (id) => {
+  const deleteDraft = async (id) => {
     const draft = drafts.find((item) => item.id === id);
     if (!draft || !window.confirm(`Delete "${draft.name}"?`)) return;
     const nextDrafts = drafts.filter((item) => item.id !== id);
-    persistDrafts(nextDrafts);
+    await persistDrafts(nextDrafts);
     if (activeDraftId === id) setActiveDraftId(null);
   };
 
@@ -183,7 +261,7 @@ export default function HomePage() {
     setGlobalStyles(DEFAULT_STYLES);
     setActiveDraftId(null);
     localStorage.removeItem("email_studio_blocks_v2");
-    localStorage.setItem("email_studio_styles_v2", JSON.stringify(DEFAULT_STYLES));
+    safeSetLocalStorage("email_studio_styles_v2", JSON.stringify(DEFAULT_STYLES));
     setActiveSection("builder");
   };
 

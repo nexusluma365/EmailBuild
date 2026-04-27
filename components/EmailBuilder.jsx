@@ -58,11 +58,11 @@ const TEMPLATES = {
     name:"Newsletter", emoji:"📧", desc:"Monthly updates & stories",
     blocks: mkBlocks([
       {type:"subject",  data:{text:"📧 Our Monthly Newsletter — Issue #1"}},
-      {type:"header",   data:{logoText:"Newsletter Co",logoUrl:"",bgColor:"#1A1D2E",textColor:"#fff",align:"center"}},
+      {type:"header",   data:{logoText:"Newsletter Co",logoUrl:"",bgColor:"#1A1D2E",textColor:"#ffffff",align:"center"}},
       {type:"image",    data:{...BD.image}},
       {type:"headline", data:{text:"What's New This Month",fontSize:26,color:"#0f0f1a",align:"left",fontWeight:"800"}},
       {type:"text",     data:{html:"<p>We're excited to share the latest updates, stories, and highlights from our team. There's so much to cover — let's dive right in!</p>",fontSize:15,color:"#444455"}},
-      {type:"button",   data:{text:"Read Full Story →",url:"",bgColor:ACC,textColor:"#fff",align:"left",size:"medium",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC}},
+      {type:"button",   data:{text:"Read Full Story →",url:"",bgColor:ACC,textColor:"#ffffff",align:"left",size:"medium",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC}},
       {type:"divider",  data:{...BD.divider}},
       {type:"headline", data:{text:"More Highlights",fontSize:20,color:"#0f0f1a",align:"left",fontWeight:"700"}},
       {type:"columns",  data:{leftHtml:"<p><strong>Story One</strong><br/>A short description of your first story or highlight.</p>",rightHtml:"<p><strong>Story Two</strong><br/>A short description of your second story or highlight.</p>",gap:20,color:"#444455",fontSize:14}},
@@ -74,11 +74,11 @@ const TEMPLATES = {
     name:"Promotional", emoji:"🔥", desc:"Sales, offers & launches",
     blocks: mkBlocks([
       {type:"subject",  data:{text:"🔥 Limited Time — Don't Miss This!"}},
-      {type:"header",   data:{logoText:"YourBrand",logoUrl:"",bgColor:ACC,textColor:"#fff",align:"center"}},
+      {type:"header",   data:{logoText:"YourBrand",logoUrl:"",bgColor:ACC,textColor:"#ffffff",align:"center"}},
       {type:"image",    data:{...BD.image}},
       {type:"headline", data:{text:"50% Off — This Weekend Only",fontSize:30,color:ACC,align:"center",fontWeight:"900"}},
       {type:"text",     data:{html:"<p style='text-align:center'>Don't miss our biggest sale of the year. This offer expires Sunday at midnight — act fast!</p>",fontSize:16,color:"#444455"}},
-      {type:"button",   data:{text:"Shop Now — Save 50%",url:"",bgColor:ACC,textColor:"#fff",align:"center",size:"large",fullWidth:true,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC}},
+      {type:"button",   data:{text:"Shop Now — Save 50%",url:"",bgColor:ACC,textColor:"#ffffff",align:"center",size:"large",fullWidth:true,radius:8,useAccentColor:true,borderWidth:0,borderColor:ACC}},
       {type:"text",     data:{html:"<p style='text-align:center;font-size:12px;color:#9CA3AF'>Use code <strong>SAVE50</strong> at checkout &bull; Ends Sunday midnight</p>",fontSize:12,color:"#9CA3AF"}},
       {type:"footer",   data:{...BD.footer}},
     ]),
@@ -88,10 +88,10 @@ const TEMPLATES = {
     name:"Welcome Email", emoji:"👋", desc:"Onboard new subscribers",
     blocks: mkBlocks([
       {type:"subject",  data:{text:"Welcome to the family! 🎉"}},
-      {type:"header",   data:{logoText:"YourApp",logoUrl:"",bgColor:"#3730A3",textColor:"#fff",align:"center"}},
+      {type:"header",   data:{logoText:"YourApp",logoUrl:"",bgColor:"#3730A3",textColor:"#ffffff",align:"center"}},
       {type:"headline", data:{text:"You're officially in! 🎉",fontSize:30,color:"#0f0f1a",align:"center",fontWeight:"800"}},
       {type:"text",     data:{html:"<p style='text-align:center'>We're thrilled to have you on board. Everything is ready for you. Let's get you started!</p>",fontSize:16,color:"#444455"}},
-      {type:"button",   data:{text:"Go to Your Dashboard →",url:"",bgColor:"#3730A3",textColor:"#fff",align:"center",size:"large",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:"#3730A3"}},
+      {type:"button",   data:{text:"Go to Your Dashboard →",url:"",bgColor:"#3730A3",textColor:"#ffffff",align:"center",size:"large",fullWidth:false,radius:8,useAccentColor:true,borderWidth:0,borderColor:"#3730A3"}},
       {type:"divider",  data:{...BD.divider,margin:28}},
       {type:"columns",  data:{leftHtml:"<p><strong>📚 Step 1: Set up</strong><br/>Customize your profile and preferences in just a few clicks.</p>",rightHtml:"<p><strong>🚀 Step 2: Explore</strong><br/>Discover features built to make your life easier.</p>",gap:20,color:"#444455",fontSize:14}},
       {type:"footer",   data:{...BD.footer}},
@@ -935,7 +935,8 @@ function Tb({active,onClick,children,style:sx={}}) {
   return <button onClick={onClick} style={{flex:1,padding:"5px 0",border:`1px solid ${active?ACC:BRD}`,borderRadius:5,background:active?"#FDF3EE":"#fff",color:active?ACC:"#6B7280",fontSize:11.5,fontWeight:500,cursor:"pointer",fontFamily:"inherit",...sx}}>{children}</button>;
 }
 function ColorRow({value,onChange,swatches}) {
-  return <div style={{display:"flex",alignItems:"center",gap:7}}><input type="color" value={value||"#000000"} onChange={e=>onChange(e.target.value)} style={{width:32,height:32,borderRadius:6,border:`1px solid ${BRD}`,cursor:"pointer",padding:2,background:"#fff",flexShrink:0}}/><input type="text" value={value||""} onChange={e=>onChange(e.target.value)} className="field-input" style={{flex:1,fontFamily:"monospace",fontSize:11.5}}/><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(swatches||PRESETS).slice(0,6).map(c=><button key={c} onClick={()=>onChange(c)} style={{width:18,height:18,borderRadius:"50%",background:c,border:value===c?"2.5px solid #1A1D2E":"1.5px solid rgba(0,0,0,0.12)",cursor:"pointer",flexShrink:0}}/>)}</div></div>;
+  const normalized = normalizeHexColor(value);
+  return <div style={{display:"flex",alignItems:"center",gap:7}}><input type="color" value={normalized||"#000000"} onChange={e=>onChange(e.target.value)} style={{width:32,height:32,borderRadius:6,border:`1px solid ${BRD}`,cursor:"pointer",padding:2,background:"#fff",flexShrink:0}}/><input type="text" value={value||""} onChange={e=>onChange(e.target.value)} onBlur={e=>{const next=normalizeHexColor(e.target.value); if(next) onChange(next);}} className="field-input" style={{flex:1,fontFamily:"monospace",fontSize:11.5}}/><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(swatches||PRESETS).slice(0,6).map(c=>{const swatch=normalizeHexColor(c)||c; return <button key={c} onClick={()=>onChange(swatch)} style={{width:18,height:18,borderRadius:"50%",background:swatch,border:normalized===swatch?"2.5px solid #1A1D2E":"1.5px solid rgba(0,0,0,0.12)",cursor:"pointer",flexShrink:0}}/>;})}</div></div>;
 }
 function Align({value,onChange}) {
   return <div style={{display:"flex",gap:6}}>{[["left","≡"],["center","≡"],["right","≡"]].map(([v,_],i)=>{
@@ -956,4 +957,14 @@ function normalizeLink(value) {
   if (!raw || raw === "https://") return "";
   if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw;
   return `https://${raw.replace(/^\/+/, "")}`;
+}
+
+function normalizeHexColor(value) {
+  const raw = String(value || "").trim();
+  const short = raw.match(/^#([0-9a-f]{3})$/i);
+  if (short) {
+    return `#${short[1].split("").map((char) => char + char).join("")}`.toLowerCase();
+  }
+  if (/^#[0-9a-f]{6}$/i.test(raw)) return raw.toLowerCase();
+  return "";
 }
