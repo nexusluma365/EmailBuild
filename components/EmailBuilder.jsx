@@ -127,7 +127,8 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
     const nb = {id:mkId(), type:typeId, data:{...BD[typeId]}};
     setBlocks(p => {
       if (!p) return [nb];
-      const idx = selectedId ? p.findIndex(b=>b.id===selectedId) : p.length-1;
+      const selectedIndex = selectedId ? p.findIndex(b=>b.id===selectedId) : -1;
+      const idx = selectedIndex >= 0 ? selectedIndex : p.length-1;
       const n=[...p]; n.splice(idx+1,0,nb); return n;
     });
     setSelectedId(nb.id); setPanelTab("edit");
@@ -142,6 +143,17 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
     const i=p.findIndex(b=>b.id===id);
     if ((dir<0&&i===0)||(dir>0&&i===p.length-1)) return p;
     const n=[...p]; [n[i],n[i+dir]]=[n[i+dir],n[i]]; return n;
+  });
+
+  const moveBlockTo = (dragId, targetId) => setBlocks(p => {
+    if (!dragId || !targetId || dragId === targetId) return p;
+    const from = p.findIndex(b => b.id === dragId);
+    const to = p.findIndex(b => b.id === targetId);
+    if (from < 0 || to < 0) return p;
+    const n = [...p];
+    const [moved] = n.splice(from, 1);
+    n.splice(to, 0, moved);
+    return n;
   });
 
   const dupBlock = (id) => setBlocks(p => {
@@ -235,6 +247,7 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
                     onDuplicate={()=>dupBlock(block.id)}
                     onMoveUp={()=>moveBlock(block.id,-1)}
                     onMoveDown={()=>moveBlock(block.id,1)}
+                    onDropBlock={(dragId)=>moveBlockTo(dragId,block.id)}
                   />
                 ))}
                 {(!blocks||blocks.length===0)&&(
@@ -705,13 +718,35 @@ function RTE({html,onChange}) {
 }
 
 /* ─── BLOCK ROW (canvas wrapper) ─────────────────────── */
-function BlockRow({block,idx,total,isSelected,ff,globalStyles,onSelect,onUpdate,onRemove,onDuplicate,onMoveUp,onMoveDown}) {
+function BlockRow({block,idx,total,isSelected,ff,globalStyles,onSelect,onUpdate,onRemove,onDuplicate,onMoveUp,onMoveDown,onDropBlock}) {
   const [hov,setHov]=useState(false);
+  const [dragOver,setDragOver]=useState(false);
   const show=isSelected||hov;
 
   return (
-    <div style={{position:"relative"}} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}>
-      <div onClick={onSelect} style={{position:"relative",cursor:"pointer",
+    <div
+      style={{position:"relative"}}
+      draggable
+      onDragStart={e=>{
+        e.dataTransfer.effectAllowed="move";
+        e.dataTransfer.setData("text/email-block-id",block.id);
+      }}
+      onDragOver={e=>{
+        e.preventDefault();
+        e.dataTransfer.dropEffect="move";
+        setDragOver(true);
+      }}
+      onDragLeave={()=>setDragOver(false)}
+      onDrop={e=>{
+        e.preventDefault();
+        setDragOver(false);
+        onDropBlock(e.dataTransfer.getData("text/email-block-id"));
+      }}
+      onMouseEnter={()=>setHov(true)}
+      onMouseLeave={()=>setHov(false)}
+    >
+      {dragOver&&<div style={{position:"absolute",top:-3,left:0,right:0,height:3,background:ACC,borderRadius:4,zIndex:30}}/>}
+      <div onClick={onSelect} style={{position:"relative",cursor:"grab",
         boxShadow:isSelected?`inset 0 0 0 2px ${ACC}`:hov?"inset 0 0 0 1px #E8C4B0":"none",
         transition:"box-shadow 0.1s"}}>
         {isSelected&&(

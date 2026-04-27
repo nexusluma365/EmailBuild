@@ -37,6 +37,18 @@ export async function PATCH(req, { params }) {
       if (body[key] !== undefined) patch[key] = body[key];
     }
 
+    const nextSubject = patch.subject;
+    const nextBlocks = patch.blocks;
+    if (
+      (nextSubject !== undefined || nextBlocks !== undefined) &&
+      !isSendableCampaign(nextSubject, nextBlocks)
+    ) {
+      return Response.json(
+        { error: "Campaigns need a subject and at least one content block." },
+        { status: 400 }
+      );
+    }
+
     if (body.scheduleConfig !== undefined || body.schedule_config !== undefined) {
       patch.schedule_config = normalizeScheduleConfig(
         body.scheduleConfig || body.schedule_config || {}
@@ -75,4 +87,15 @@ export async function PATCH(req, { params }) {
     const status = error.message === "Unauthorized" ? 401 : 500;
     return Response.json({ error: error.message }, { status });
   }
+}
+
+function isSendableCampaign(subject, blocks) {
+  if (subject !== undefined && !String(subject || "").trim()) return false;
+  if (blocks !== undefined) {
+    const list = Array.isArray(blocks) ? blocks : [];
+    return list.some((block) =>
+      ["headline", "text", "image", "button", "columns"].includes(block.type)
+    );
+  }
+  return true;
 }

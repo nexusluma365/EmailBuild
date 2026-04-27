@@ -33,12 +33,21 @@ export async function POST(req) {
     const userEmail = await requireUserEmail(req);
     const body = await req.json();
     const supabase = getSupabaseAdmin();
+    const blocks = Array.isArray(body.blocks) ? body.blocks : [];
+    const subject = String(body.subject || "").trim();
+
+    if (!isSendableCampaign(subject, blocks)) {
+      return Response.json(
+        { error: "Campaigns need a subject and at least one content block." },
+        { status: 400 }
+      );
+    }
 
     const payload = {
       owner_email: userEmail,
       name: body.name || "Untitled Campaign",
-      subject: body.subject || "",
-      blocks: body.blocks || [],
+      subject,
+      blocks,
       global_styles: body.global_styles || body.globalStyles || {},
       status: body.status || "draft",
       audience_source: "contacts",
@@ -64,4 +73,13 @@ export async function POST(req) {
     const status = error.message === "Unauthorized" ? 401 : 500;
     return Response.json({ error: error.message }, { status });
   }
+}
+
+function isSendableCampaign(subject, blocks) {
+  return Boolean(
+    subject &&
+      blocks.some((block) =>
+        ["headline", "text", "image", "button", "columns"].includes(block.type)
+      )
+  );
 }

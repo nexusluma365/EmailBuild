@@ -4,8 +4,9 @@ import { refreshGoogleAccessToken } from "@/lib/googleAuth";
 import { persistGoogleConnection } from "@/lib/googleConnections";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
-const MAX_RECIPIENTS_PER_REQUEST = 25;
+const MAX_RECIPIENTS_PER_REQUEST = 5;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req) {
@@ -62,9 +63,7 @@ export async function POST(req) {
     );
   }
 
-  const results = [];
-
-  for (const recipient of recipientEmails) {
+  const results = await Promise.all(recipientEmails.map(async (recipient) => {
     try {
       if (!EMAIL_RE.test(recipient)) {
         throw new Error("Invalid email address.");
@@ -79,14 +78,14 @@ export async function POST(req) {
         fromEmail: token.email || "",
       });
 
-      results.push({ email: recipient, status: "sent", messageId: result.id });
+      return { email: recipient, status: "sent", messageId: result.id };
     } catch (err) {
       console.error("Gmail send error:", err);
 
       const message = normalizeSendError(err);
-      results.push({ email: recipient, status: "error", message });
+      return { email: recipient, status: "error", message };
     }
-  }
+  }));
 
   const failedAuth = results.find((row) =>
     /reconnect google|missing gmail send permission/i.test(row.message || "")

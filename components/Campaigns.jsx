@@ -30,7 +30,10 @@ export default function Campaigns({ blocks, globalStyles }) {
 
   const subject =
     blocks?.find((block) => block.type === "subject")?.data?.text || "";
-  const hasDraft = Boolean(blocks?.length);
+  const hasContent = blocks?.some((block) =>
+    ["headline", "text", "image", "button", "columns"].includes(block.type)
+  );
+  const hasSendableDraft = Boolean(subject && hasContent);
 
   async function loadCampaigns() {
     setLoading(true);
@@ -57,8 +60,8 @@ export default function Campaigns({ blocks, globalStyles }) {
   }, []);
 
   async function createCampaign() {
-    if (!hasDraft) {
-      setMessage("Build an email first, then create a campaign from that draft.");
+    if (!hasSendableDraft) {
+      setMessage("Add a subject and at least one content block before creating a campaign.");
       return;
     }
 
@@ -178,8 +181,8 @@ export default function Campaigns({ blocks, globalStyles }) {
         />
         <button
           onClick={createCampaign}
-          disabled={!hasDraft || busyId === "create"}
-          style={primaryButton(!hasDraft || busyId === "create")}
+          disabled={!hasSendableDraft || busyId === "create"}
+          style={primaryButton(!hasSendableDraft || busyId === "create")}
         >
           {busyId === "create" ? "Creating…" : "Save Current Draft as Campaign"}
         </button>
@@ -249,8 +252,8 @@ export default function Campaigns({ blocks, globalStyles }) {
                           "Campaign content updated from the current draft."
                         )
                       }
-                      disabled={!hasDraft || busyId === campaign.id}
-                      style={secondaryButton(!hasDraft || busyId === campaign.id)}
+                      disabled={!hasSendableDraft || busyId === campaign.id}
+                      style={secondaryButton(!hasSendableDraft || busyId === campaign.id)}
                     >
                       Use Current Draft
                     </button>
