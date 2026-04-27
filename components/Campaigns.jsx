@@ -163,7 +163,7 @@ export default function Campaigns({ blocks, globalStyles }) {
       <div
         style={{
           width: 304,
-          background: "#fff",
+          background: "#ffffff",
           borderRight: "1px solid #E5E0DA",
           padding: "16px 14px",
           overflowY: "auto",
@@ -481,7 +481,7 @@ function primaryButton(disabled) {
     border: "none",
     borderRadius: 7,
     background: disabled ? "#EDE9E4" : "#D05A2C",
-    color: disabled ? "#9CA3AF" : "#fff",
+    color: disabled ? "#9CA3AF" : "#ffffff",
     fontSize: 12.5,
     fontWeight: 600,
     cursor: disabled ? "not-allowed" : "pointer",
@@ -495,7 +495,7 @@ function secondaryButton(disabled) {
     padding: "9px 12px",
     border: "1px solid #E5E0DA",
     borderRadius: 7,
-    background: disabled ? "#FAFAF9" : "#fff",
+    background: disabled ? "#FAFAF9" : "#ffffff",
     color: disabled ? "#9CA3AF" : "#4B5563",
     fontSize: 12.5,
     fontWeight: 600,
@@ -541,7 +541,7 @@ const emptyState = {
 };
 
 const card = {
-  background: "#fff",
+  background: "#ffffff",
   border: "1px solid #E5E0DA",
   borderRadius: 12,
   padding: 16,
@@ -585,7 +585,7 @@ function weekdayPill(active) {
     textAlign: "center",
     borderRadius: 8,
     border: `1px solid ${active ? "#D05A2C" : "#E5E0DA"}`,
-    background: active ? "#FDF3EE" : "#fff",
+    background: active ? "#FDF3EE" : "#ffffff",
     color: active ? "#D05A2C" : "#6B7280",
     fontSize: 12,
     cursor: "pointer",
