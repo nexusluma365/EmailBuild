@@ -176,7 +176,7 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
     <div style={{display:"flex",flex:1,overflow:"hidden"}}>
 
       {/* ── LEFT PANEL ──────────────────────── */}
-      <div style={{width:284,flexShrink:0,background:"#fff",borderRight:`1px solid ${BRD}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div style={{width:284,flexShrink:0,background:"#ffffff",borderRight:`1px solid ${BRD}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {/* Tab bar */}
         <div style={{display:"flex",borderBottom:`1px solid ${BRD}`,flexShrink:0}}>
           {["design","edit"].map(t=>(
@@ -196,10 +196,10 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
       {/* ── CANVAS AREA ──────────────────────── */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",background:"#F4EFE9"}}>
         {/* Sub-toolbar */}
-        <div style={{height:44,background:"#fff",borderBottom:`1px solid ${BRD}`,display:"flex",alignItems:"center",padding:"0 14px",gap:6,flexShrink:0}}>
+        <div style={{height:44,background:"#ffffff",borderBottom:`1px solid ${BRD}`,display:"flex",alignItems:"center",padding:"0 14px",gap:6,flexShrink:0}}>
           <div style={{display:"flex",gap:0,marginRight:6}}>
             {["Block","Page"].map((t,i)=>(
-              <button key={t} style={{padding:"5px 13px",border:`1px solid ${BRD}`,borderRight:i===0?"none":undefined,borderRadius:i===0?"6px 0 0 6px":"0 6px 6px 0",background:i===0?"#F4EFE9":"#fff",fontSize:11.5,fontWeight:500,color:i===0?ACC:"#6B7280",cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
+              <button key={t} style={{padding:"5px 13px",border:`1px solid ${BRD}`,borderRight:i===0?"none":undefined,borderRadius:i===0?"6px 0 0 6px":"0 6px 6px 0",background:i===0?"#F4EFE9":"#ffffff",fontSize:11.5,fontWeight:500,color:i===0?ACC:"#6B7280",cursor:"pointer",fontFamily:"inherit"}}>{t}</button>
             ))}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
@@ -236,7 +236,7 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
             {/* Email shell */}
             <div style={{background:globalStyles?.bgColor||"#f4f4f7",padding:`0 0 ${globalStyles?.canvasPadding ?? 20}px`,borderRadius:"0 0 10px 10px",minHeight:500}}
               onClick={e=>e.stopPropagation()}>
-              <div style={{maxWidth:600,margin:"0 auto",background:globalStyles?.contentBgColor||"#fff",boxShadow:getContainerShadow(globalStyles?.containerShadow),fontFamily:ff,borderRadius:globalStyles?.containerRadius||0,overflow:"hidden",border:`${globalStyles?.containerBorderWidth||0}px solid ${globalStyles?.containerBorderColor||BRD}`}}>
+              <div style={{maxWidth:600,margin:"0 auto",background:globalStyles?.contentBgColor||"#ffffff",boxShadow:getContainerShadow(globalStyles?.containerShadow),fontFamily:ff,borderRadius:globalStyles?.containerRadius||0,overflow:"hidden",border:`${globalStyles?.containerBorderWidth||0}px solid ${globalStyles?.containerBorderColor||BRD}`}}>
                 {(blocks||[]).map((block,idx)=>(
                   <BlockRow key={block.id} block={block} idx={idx} total={(blocks||[]).length}
                     isSelected={selectedId===block.id} ff={ff}
@@ -262,7 +262,7 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
 
             <div style={{textAlign:"center",paddingTop:14}}>
               <button onClick={()=>setPanelTab("design")}
-                style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 18px",background:"#fff",border:`1.5px dashed ${BRD}`,borderRadius:8,color:MUT,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
+                style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 18px",background:"#ffffff",border:`1.5px dashed ${BRD}`,borderRadius:8,color:MUT,fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=ACC;e.currentTarget.style.color=ACC;}}
                 onMouseLeave={e=>{e.currentTarget.style.borderColor=BRD;e.currentTarget.style.color=MUT;}}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -294,7 +294,7 @@ function TemplatePicker({onSelect}) {
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
           {Object.entries(TEMPLATES).map(([k,tpl])=>(
             <button key={k} onClick={()=>onSelect(tpl)}
-              style={{background:"#fff",border:"2px solid #E5E0DA",borderRadius:14,padding:"28px 18px 22px",cursor:"pointer",fontFamily:"inherit",textAlign:"center",transition:"all 0.2s",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}
+              style={{background:"#ffffff",border:"2px solid #E5E0DA",borderRadius:14,padding:"28px 18px 22px",cursor:"pointer",fontFamily:"inherit",textAlign:"center",transition:"all 0.2s",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=ACC;e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 30px rgba(208,90,44,0.15)";}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor="#E5E0DA";e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
               <span style={{fontSize:34}}>{tpl.emoji}</span>
@@ -332,9 +332,9 @@ function DesignPanel({blocks,onAdd,globalStyles,setGlobalStyles,onPickTemplate})
             const active=blocks?.some(b=>b.type===bt.id);
             return (
               <button key={bt.id} onClick={()=>onAdd(bt.id)}
-                style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"15px 8px 11px",background:"#fff",border:`1.5px solid ${active?ACC:BRD}`,borderRadius:10,cursor:"pointer",gap:7,transition:"all 0.15s",fontFamily:"inherit",minHeight:78,position:"relative"}}
+                style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"15px 8px 11px",background:"#ffffff",border:`1.5px solid ${active?ACC:BRD}`,borderRadius:10,cursor:"pointer",gap:7,transition:"all 0.15s",fontFamily:"inherit",minHeight:78,position:"relative"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=ACC;e.currentTarget.style.background="#FDF3EE";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor=active?ACC:BRD;e.currentTarget.style.background="#fff";}}>
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=active?ACC:BRD;e.currentTarget.style.background="#ffffff";}}>
                 <svg width="32" height="24" viewBox="0 0 32 24" fill="none" stroke={active?ACC:"#9CA3AF"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><g transform="translate(4,2)">{bt.icon}</g></svg>
                 <span style={{fontSize:11,fontWeight:600,color:active?ACC:"#6B7280",textAlign:"center",lineHeight:1.3}}>{bt.label}</span>
                 {active&&<div style={{position:"absolute",top:-1,right:-1,width:8,height:8,borderRadius:"50%",background:ACC}}/>}
@@ -400,7 +400,7 @@ function EditPanel({block,onUpdate,onRemove,onSwitch}) {
       <div style={{fontSize:36,marginBottom:12}}>✏️</div>
       <p style={{fontSize:13,fontWeight:500,color:"#C5B8AC",marginBottom:6}}>No block selected</p>
       <p style={{fontSize:12,lineHeight:1.5}}>Click any block in the preview to edit its content and style.</p>
-      <button onClick={onSwitch} style={{marginTop:16,padding:"7px 16px",background:ACC,color:"#fff",border:"none",borderRadius:6,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Browse Blocks</button>
+      <button onClick={onSwitch} style={{marginTop:16,padding:"7px 16px",background:ACC,color:"#ffffff",border:"none",borderRadius:6,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Browse Blocks</button>
     </div>
   );
 
@@ -445,7 +445,7 @@ function BlockFields({block,onUpdate}) {
         <ImgUpload src={data.logoUrl} onSrc={v=>u("logoUrl",v)} small/>
       </Fld>
       <Fld label="Background Color">
-        <ColorRow value={data.bgColor} onChange={v=>u("bgColor",v)} swatches={["#1A1D2E","#D05A2C","#3730A3","#059669","#fff","#000"]}/>
+        <ColorRow value={data.bgColor} onChange={v=>u("bgColor",v)} swatches={["#1A1D2E","#D05A2C","#3730A3","#059669","#ffffff","#000000"]}/>
       </Fld>
       <Fld label="Text / Logo Color">
         <ColorRow value={data.textColor} onChange={v=>u("textColor",v)} swatches={["#ffffff","#1A1D2E","#F4EFE9"]}/>
@@ -541,7 +541,7 @@ function BlockFields({block,onUpdate}) {
         {data.useAccentColor&&<p style={{marginTop:4,fontSize:11,color:"#D97706"}}>Choosing a custom color turns off accent inheritance.</p>}
       </Fld>
       <Fld label="Text Color">
-        <ColorRow value={data.textColor||"#fff"} onChange={v=>u("textColor",v)} swatches={["#ffffff","#1A1D2E","#F4EFE9"]}/>
+        <ColorRow value={data.textColor||"#ffffff"} onChange={v=>u("textColor",v)} swatches={["#ffffff","#1A1D2E","#F4EFE9"]}/>
       </Fld>
       <Fld label="Border Color">
         <ColorRow value={data.borderColor||data.bgColor||ACC} onChange={v=>onUpdate({ borderColor:v, useAccentColor:false })} swatches={PRESETS}/>
@@ -621,10 +621,10 @@ function BlockFields({block,onUpdate}) {
         <input type="url" value={data.unsubUrl} onChange={e=>u("unsubUrl",e.target.value)} placeholder="https://…" className="field-input"/>
       </Fld>
       <Fld label="Background Color">
-        <ColorRow value={data.bgColor||"#FAFAF9"} onChange={v=>u("bgColor",v)} swatches={["#FAFAF9","#f4f4f7","#1A1D2E","#fff"]}/>
+        <ColorRow value={data.bgColor||"#FAFAF9"} onChange={v=>u("bgColor",v)} swatches={["#FAFAF9","#f4f4f7","#1A1D2E","#ffffff"]}/>
       </Fld>
       <Fld label="Text Color">
-        <ColorRow value={data.textColor||"#9CA3AF"} onChange={v=>u("textColor",v)} swatches={["#9CA3AF","#6B7280","#fff"]}/>
+        <ColorRow value={data.textColor||"#9CA3AF"} onChange={v=>u("textColor",v)} swatches={["#9CA3AF","#6B7280","#ffffff"]}/>
       </Fld>
     </>);
 
@@ -750,7 +750,7 @@ function BlockRow({block,idx,total,isSelected,ff,globalStyles,onSelect,onUpdate,
         boxShadow:isSelected?`inset 0 0 0 2px ${ACC}`:hov?"inset 0 0 0 1px #E8C4B0":"none",
         transition:"box-shadow 0.1s"}}>
         {isSelected&&(
-          <div style={{position:"absolute",top:0,left:0,zIndex:10,background:ACC,color:"#fff",fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:"0 0 6px 0",letterSpacing:"0.04em",pointerEvents:"none"}}>
+          <div style={{position:"absolute",top:0,left:0,zIndex:10,background:ACC,color:"#ffffff",fontSize:10,fontWeight:700,padding:"2px 9px",borderRadius:"0 0 6px 0",letterSpacing:"0.04em",pointerEvents:"none"}}>
             {BTYPES.find(b=>b.id===block.type)?.label||block.type}
           </div>
         )}
@@ -771,9 +771,9 @@ function BlockRow({block,idx,total,isSelected,ff,globalStyles,onSelect,onUpdate,
 
 const CB=({title,onClick,children,danger})=>(
   <button title={title} onClick={onClick}
-    style={{width:28,height:28,borderRadius:6,border:`1px solid ${danger?"#FCA5A5":BRD}`,background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:danger?"#EF4444":"#6B7280",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}
+    style={{width:28,height:28,borderRadius:6,border:`1px solid ${danger?"#FCA5A5":BRD}`,background:"#ffffff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:danger?"#EF4444":"#6B7280",boxShadow:"0 1px 4px rgba(0,0,0,0.08)"}}
     onMouseEnter={e=>{e.currentTarget.style.background=danger?"#FEF2F2":"#F4EFE9";}}
-    onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+    onMouseLeave={e=>{e.currentTarget.style.background="#ffffff";}}>
     {children}
   </button>
 );
@@ -785,7 +785,7 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
 
   switch(type) {
     case "subject": return (
-      <div style={{background:"#fff",borderBottom:`1px solid #E5E0DA`,padding:"10px 20px",fontFamily:ff}}>
+      <div style={{background:"#ffffff",borderBottom:`1px solid #E5E0DA`,padding:"10px 20px",fontFamily:ff}}>
         <span style={{fontSize:12,color:"#6B7280"}}><strong style={{color:"#1A1D2E"}}>Subject: </strong>{data.text||<em style={{color:"#C5B8AC"}}>Add subject…</em>}</span>
       </div>
     );
@@ -794,7 +794,7 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
       <div style={{background:data.bgColor||"#1A1D2E",padding:"20px 32px",textAlign:data.align||"center",fontFamily:ff}}>
         {data.logoUrl
           ? <img src={data.logoUrl} alt={data.logoText||"Logo"} style={{maxHeight:48,maxWidth:220,objectFit:"contain",display:"inline-block"}} onError={e=>e.target.style.display="none"}/>
-          : <div style={{fontSize:20,fontWeight:800,color:data.textColor||"#fff",letterSpacing:"-0.3px"}}>{data.logoText||"Your Brand"}</div>
+          : <div style={{fontSize:20,fontWeight:800,color:data.textColor||"#ffffff",letterSpacing:"-0.3px"}}>{data.logoText||"Your Brand"}</div>
         }
       </div>
     );
@@ -851,7 +851,7 @@ function BPrev({block,ff,globalStyles,isSelected,onUpdate}) {
         <div style={{padding:"12px 32px 20px",textAlign:data.align||"center",fontFamily:ff}}>
           <a href={hasUrl?href:"#"} target={hasUrl?"_blank":undefined} rel="noopener noreferrer"
             onClick={e=>{if(!hasUrl)e.preventDefault();e.stopPropagation();}}
-            style={{display:data.fullWidth?"block":"inline-block",background:bg,color:data.textColor||"#fff",padding:pad,borderRadius:data.radius||8,fontSize:fs,fontWeight:700,textDecoration:"none",textAlign:"center",letterSpacing:"0.01em",border:`${data.borderWidth||0}px solid ${borderColor}`}}>
+            style={{display:data.fullWidth?"block":"inline-block",background:bg,color:data.textColor||"#ffffff",padding:pad,borderRadius:data.radius||8,fontSize:fs,fontWeight:700,textDecoration:"none",textAlign:"center",letterSpacing:"0.01em",border:`${data.borderWidth||0}px solid ${borderColor}`}}>
             {data.text||"Click Here →"}
           </a>
           {!hasUrl&&<div style={{marginTop:6,fontSize:10.5,color:"#D97706"}}>⚠ Add a URL in the Edit panel to activate this button</div>}
@@ -932,16 +932,16 @@ function Slider({min,max,value,onChange,unit}) {
   return <div style={{display:"flex",alignItems:"center",gap:8}}><input type="range" min={min} max={max} value={value} onChange={e=>onChange(+e.target.value)} style={{flex:1}}/><span style={{fontSize:12,color:MUT,minWidth:34}}>{value}{unit}</span></div>;
 }
 function Tb({active,onClick,children,style:sx={}}) {
-  return <button onClick={onClick} style={{flex:1,padding:"5px 0",border:`1px solid ${active?ACC:BRD}`,borderRadius:5,background:active?"#FDF3EE":"#fff",color:active?ACC:"#6B7280",fontSize:11.5,fontWeight:500,cursor:"pointer",fontFamily:"inherit",...sx}}>{children}</button>;
+  return <button onClick={onClick} style={{flex:1,padding:"5px 0",border:`1px solid ${active?ACC:BRD}`,borderRadius:5,background:active?"#FDF3EE":"#ffffff",color:active?ACC:"#6B7280",fontSize:11.5,fontWeight:500,cursor:"pointer",fontFamily:"inherit",...sx}}>{children}</button>;
 }
 function ColorRow({value,onChange,swatches}) {
   const normalized = normalizeHexColor(value);
-  return <div style={{display:"flex",alignItems:"center",gap:7}}><input type="color" value={normalized||"#000000"} onChange={e=>onChange(e.target.value)} style={{width:32,height:32,borderRadius:6,border:`1px solid ${BRD}`,cursor:"pointer",padding:2,background:"#fff",flexShrink:0}}/><input type="text" value={value||""} onChange={e=>onChange(e.target.value)} onBlur={e=>{const next=normalizeHexColor(e.target.value); if(next) onChange(next);}} className="field-input" style={{flex:1,fontFamily:"monospace",fontSize:11.5}}/><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(swatches||PRESETS).slice(0,6).map(c=>{const swatch=normalizeHexColor(c)||c; return <button key={c} onClick={()=>onChange(swatch)} style={{width:18,height:18,borderRadius:"50%",background:swatch,border:normalized===swatch?"2.5px solid #1A1D2E":"1.5px solid rgba(0,0,0,0.12)",cursor:"pointer",flexShrink:0}}/>;})}</div></div>;
+  return <div style={{display:"flex",alignItems:"center",gap:7}}><input type="color" value={normalized||"#000000"} onChange={e=>onChange(e.target.value)} style={{width:32,height:32,borderRadius:6,border:`1px solid ${BRD}`,cursor:"pointer",padding:2,background:"#ffffff",flexShrink:0}}/><input type="text" value={value||""} onChange={e=>onChange(e.target.value)} onBlur={e=>{const next=normalizeHexColor(e.target.value); if(next) onChange(next);}} className="field-input" style={{flex:1,fontFamily:"monospace",fontSize:11.5}}/><div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{(swatches||PRESETS).slice(0,6).map(c=>{const swatch=normalizeHexColor(c)||c; return <button key={c} onClick={()=>onChange(swatch)} style={{width:18,height:18,borderRadius:"50%",background:swatch,border:normalized===swatch?"2.5px solid #1A1D2E":"1.5px solid rgba(0,0,0,0.12)",cursor:"pointer",flexShrink:0}}/>;})}</div></div>;
 }
 function Align({value,onChange}) {
   return <div style={{display:"flex",gap:6}}>{[["left","≡"],["center","≡"],["right","≡"]].map(([v,_],i)=>{
     const icons=[<><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="11" x2="15" y2="11"/><line x1="3" y1="16" x2="18" y2="16"/></>,<><line x1="3" y1="6" x2="21" y2="6"/><line x1="7" y1="11" x2="17" y2="11"/><line x1="5" y1="16" x2="19" y2="16"/></>,<><line x1="3" y1="6" x2="21" y2="6"/><line x1="9" y1="11" x2="21" y2="11"/><line x1="6" y1="16" x2="21" y2="16"/></>];
-    return <button key={v} onClick={()=>onChange(v)} style={{flex:1,padding:"6px 0",border:`1px solid ${value===v?ACC:BRD}`,borderRadius:5,background:value===v?"#FDF3EE":"#fff",color:value===v?ACC:"#6B7280",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">{icons[i]}</svg></button>;
+    return <button key={v} onClick={()=>onChange(v)} style={{flex:1,padding:"6px 0",border:`1px solid ${value===v?ACC:BRD}`,borderRadius:5,background:value===v?"#FDF3EE":"#ffffff",color:value===v?ACC:"#6B7280",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">{icons[i]}</svg></button>;
   })}</div>;
 }
 
