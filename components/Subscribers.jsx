@@ -150,7 +150,7 @@ export default function Subscribers() {
       <div
         style={{
           width: 272,
-          background: "#fff",
+          background: "#ffffff",
           borderRight: "1px solid #E5E0DA",
           display: "flex",
           flexDirection: "column",
@@ -255,7 +255,7 @@ export default function Subscribers() {
       </div>
 
       <div className="canvas-bg" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ height: 44, background: "#fff", borderBottom: "1px solid #E5E0DA", display: "flex", alignItems: "center", padding: "0 16px", gap: 8, flexShrink: 0 }}>
+        <div style={{ height: 44, background: "#ffffff", borderBottom: "1px solid #E5E0DA", display: "flex", alignItems: "center", padding: "0 16px", gap: 8, flexShrink: 0 }}>
           <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
             <input
               type="text"
@@ -272,7 +272,7 @@ export default function Subscribers() {
         </div>
 
         <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
-          <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #E5E0DA", overflow: "hidden" }}>
+          <div style={{ background: "#ffffff", borderRadius: 10, border: "1px solid #E5E0DA", overflow: "hidden" }}>
             {loading ? (
               <div style={emptyBox}>Loading subscribers…</div>
             ) : filtered.length === 0 ? (
@@ -347,7 +347,7 @@ const primaryBtn = {
   width: "100%",
   padding: "7px 0",
   background: "#D05A2C",
-  color: "#fff",
+  color: "#ffffff",
   border: "none",
   borderRadius: 6,
   fontSize: 12.5,
