@@ -65,9 +65,10 @@ body {
   line-height: 1.4;
 }
 .field-input:hover { border-color: #C8C3BC; }
-.field-input:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(208,90,44,0.1); }
+.field-input:focus { border-color: var(--accent); background: #ffffff; box-shadow: 0 0 0 3px rgba(208,90,44,0.1); }
 .field-input::placeholder { color: var(--text-light); }
 textarea.field-input { resize: vertical; min-height: 72px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 .animate-spin { animation: spin 0.7s linear infinite; }
+
