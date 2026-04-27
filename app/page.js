@@ -8,6 +8,31 @@ import SendPanel from "@/components/SendPanel";
 import Campaigns from "@/components/Campaigns";
 import { buildEmailHtmlFromBlocks } from "@/lib/emailTemplate";
 
+const DRAFTS_KEY = "email_studio_drafts_v1";
+const MAX_DRAFTS = 5;
+const makeDraftId = () => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+function cloneBlocks(blocks = []) {
+  return JSON.parse(JSON.stringify(blocks || []));
+}
+
+function getDraftTitle(blocks = []) {
+  const subject = blocks.find((block) => block.type === "subject")?.data?.text?.trim();
+  const headline = blocks.find((block) => block.type === "headline")?.data?.text?.trim();
+  const header = blocks.find((block) => block.type === "header")?.data?.logoText?.trim();
+  return (subject || headline || header || "Untitled Draft").slice(0, 80);
+}
+
+function formatDraftDate(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 const DEFAULT_STYLES = {
   bgColor: "#f4f4f7",
   contentBgColor: "#ffffff",
@@ -23,6 +48,16 @@ const DEFAULT_STYLES = {
 export default function HomePage() {
   const { data: session, status } = useSession();
   const [activeSection, setActiveSection] = useState("builder");
+  const [activeDraftId, setActiveDraftId] = useState(null);
+  const [drafts, setDrafts] = useState(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem(DRAFTS_KEY) || "[]");
+        return Array.isArray(saved) ? saved.slice(0, MAX_DRAFTS) : [];
+      } catch {}
+    }
+    return [];
+  });
 
   // null = show template picker; populated = email blocks array
   const [blocks, setBlocks] = useState(() => {
@@ -57,19 +92,99 @@ export default function HomePage() {
 
   const subject = blocks?.find(b => b.type === "subject")?.data?.text || "";
 
+  const persistDrafts = (nextDrafts) => {
+    setDrafts(nextDrafts);
+    localStorage.setItem(DRAFTS_KEY, JSON.stringify(nextDrafts));
+  };
+
+  const showToast = (message) => {
+    const toast = document.createElement("div");
+    toast.textContent = message;
+    Object.assign(toast.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)", background:"#1A1D2E", color:"#fff", padding:"9px 20px", borderRadius:"8px", fontSize:"13px", fontWeight:"600", zIndex:"9999", boxShadow:"0 4px 20px rgba(0,0,0,0.2)", transition:"opacity 0.3s" });
+    document.body.appendChild(toast);
+    setTimeout(() => { toast.style.opacity="0"; setTimeout(() => toast.remove(), 300); }, 2000);
+  };
+
   const handleSave = () => {
     try {
+      if (!blocks || blocks.length === 0) {
+        alert("Create an email before saving a draft.");
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const draftName = getDraftTitle(blocks);
+      const existingIndex = activeDraftId
+        ? drafts.findIndex((draft) => draft.id === activeDraftId)
+        : -1;
+      let nextDrafts;
+
+      if (existingIndex >= 0) {
+        nextDrafts = drafts.map((draft, index) =>
+          index === existingIndex
+            ? {
+                ...draft,
+                name: draftName,
+                subject,
+                blocks: cloneBlocks(blocks),
+                globalStyles: { ...globalStyles },
+                updatedAt: now,
+              }
+            : draft
+        );
+      } else {
+        if (drafts.length >= MAX_DRAFTS) {
+          alert(`You can save up to ${MAX_DRAFTS} drafts. Delete one before saving another.`);
+          return;
+        }
+
+        const newDraft = {
+          id: makeDraftId(),
+          name: draftName,
+          subject,
+          blocks: cloneBlocks(blocks),
+          globalStyles: { ...globalStyles },
+          createdAt: now,
+          updatedAt: now,
+        };
+        nextDrafts = [newDraft, ...drafts].slice(0, MAX_DRAFTS);
+        setActiveDraftId(newDraft.id);
+      }
+
+      persistDrafts(nextDrafts);
       if (blocks) localStorage.setItem("email_studio_blocks_v2", JSON.stringify(blocks));
       localStorage.setItem("email_studio_styles_v2", JSON.stringify(globalStyles));
-      // Show brief toast instead of alert
-      const toast = document.createElement("div");
-      toast.textContent = "✓ Draft saved";
-      Object.assign(toast.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)", background:"#1A1D2E", color:"#fff", padding:"9px 20px", borderRadius:"8px", fontSize:"13px", fontWeight:"600", zIndex:"9999", boxShadow:"0 4px 20px rgba(0,0,0,0.2)", transition:"opacity 0.3s" });
-      document.body.appendChild(toast);
-      setTimeout(() => { toast.style.opacity="0"; setTimeout(() => toast.remove(), 300); }, 2000);
+      showToast("Draft saved");
     } catch(e) {
       alert("Could not save draft.");
     }
+  };
+
+  const openDraft = (draft) => {
+    setBlocks(cloneBlocks(draft.blocks || []));
+    setGlobalStyles({ ...DEFAULT_STYLES, ...(draft.globalStyles || {}) });
+    setActiveDraftId(draft.id);
+    localStorage.setItem("email_studio_blocks_v2", JSON.stringify(draft.blocks || []));
+    localStorage.setItem("email_studio_styles_v2", JSON.stringify(draft.globalStyles || DEFAULT_STYLES));
+    setActiveSection("builder");
+    showToast("Draft opened");
+  };
+
+  const deleteDraft = (id) => {
+    const draft = drafts.find((item) => item.id === id);
+    if (!draft || !window.confirm(`Delete "${draft.name}"?`)) return;
+    const nextDrafts = drafts.filter((item) => item.id !== id);
+    persistDrafts(nextDrafts);
+    if (activeDraftId === id) setActiveDraftId(null);
+  };
+
+  const createNewDraft = () => {
+    setBlocks(null);
+    setGlobalStyles(DEFAULT_STYLES);
+    setActiveDraftId(null);
+    localStorage.removeItem("email_studio_blocks_v2");
+    localStorage.setItem("email_studio_styles_v2", JSON.stringify(DEFAULT_STYLES));
+    setActiveSection("builder");
   };
 
   const handlePreview = () => {
@@ -85,6 +200,7 @@ export default function HomePage() {
         session={session}
         activeSection={activeSection}
         subject={subject}
+        activeDraft={drafts.find((draft) => draft.id === activeDraftId)}
         onPublish={() => setActiveSection("send")}
         onPreview={handlePreview}
         onSave={handleSave}
@@ -106,6 +222,15 @@ export default function HomePage() {
           {activeSection === "campaigns" && (
             <Campaigns blocks={blocks} globalStyles={globalStyles}/>
           )}
+          {activeSection === "drafts" && (
+            <DraftsLibrary
+              drafts={drafts}
+              activeDraftId={activeDraftId}
+              onOpen={openDraft}
+              onDelete={deleteDraft}
+              onCreate={createNewDraft}
+            />
+          )}
           {activeSection === "send" && (
             <SendPanel blocks={blocks} globalStyles={globalStyles} session={session}/>
           )}
@@ -116,8 +241,8 @@ export default function HomePage() {
 }
 
 /* ─── TOP BAR ─────────────────────────────────────────── */
-function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave, onSignOut, onReconnect }) {
-  const sectionLabel = { builder:"Email Builder", subscribers:"Subscribers", campaigns:"Campaigns", send:"Send Live" };
+function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPreview, onSave, onSignOut, onReconnect }) {
+  const sectionLabel = { builder:"Email Builder", drafts:"Saved Drafts", subscribers:"Subscribers", campaigns:"Campaigns", send:"Send Live" };
   const ACC = "#D05A2C";
 
   const iconBtns = [
@@ -139,7 +264,7 @@ function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave,
       <div style={{ marginRight:6 }}>
         <div style={{ fontWeight:700, fontSize:13, color:"#1A1D2E", lineHeight:1.2 }}>{sectionLabel[activeSection] || "Email Studio"}</div>
         <div style={{ fontSize:11, color:"#9CA3AF", lineHeight:1.2, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-          {subject ? `Subject: ${subject}` : "No subject yet"}
+          {activeDraft ? `Draft: ${activeDraft.name}` : subject ? `Subject: ${subject}` : "No subject yet"}
         </div>
       </div>
 
@@ -201,6 +326,7 @@ function TopBar({ session, activeSection, subject, onPublish, onPreview, onSave,
 function IconRail({ activeSection, setActiveSection, onSignOut }) {
   const items = [
     { id:"builder",     label:"Builder",     d:<><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></> },
+    { id:"drafts",      label:"Drafts",      d:<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></> },
     { id:"subscribers", label:"Subscribers", d:<><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></> },
     { id:"campaigns",   label:"Campaigns",   d:<><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></> },
     { id:"send",        label:"Send",        d:<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></> },
@@ -228,6 +354,118 @@ function IconRail({ activeSection, setActiveSection, onSignOut }) {
           <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/>
         </svg>
       </button>
+    </div>
+  );
+}
+
+function DraftsLibrary({ drafts, activeDraftId, onOpen, onDelete, onCreate }) {
+  const ACC = "#D05A2C";
+  const canCreate = drafts.length < MAX_DRAFTS;
+
+  return (
+    <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
+      <div style={{ width:276, background:"#fff", borderRight:"1px solid #E5E0DA", display:"flex", flexDirection:"column", flexShrink:0 }}>
+        <div style={{ padding:"16px 14px", borderBottom:"1px solid #EDE9E4" }}>
+          <div style={{ fontSize:10.5, fontWeight:700, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Draft Library</div>
+          <div style={{ fontSize:13, color:"#4B5563", lineHeight:1.5, marginBottom:14 }}>
+            Save up to {MAX_DRAFTS} email drafts and reopen them later.
+          </div>
+          <button
+            onClick={onCreate}
+            disabled={!canCreate}
+            style={{ width:"100%", padding:"9px 0", background:canCreate?ACC:"#EDE9E4", color:canCreate?"#fff":"#9CA3AF", border:"none", borderRadius:6, fontSize:12.5, fontWeight:700, cursor:canCreate?"pointer":"not-allowed", fontFamily:"inherit" }}
+          >
+            New Draft
+          </button>
+          {!canCreate && (
+            <div style={{ marginTop:8, fontSize:11.5, color:"#9CA3AF", lineHeight:1.4 }}>
+              Delete a draft before creating another.
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:"12px 14px" }}>
+          <StatLine label="Saved" value={`${drafts.length}/${MAX_DRAFTS}`} />
+        </div>
+      </div>
+
+      <div className="canvas-bg" style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+        <div style={{ height:44, background:"#fff", borderBottom:"1px solid #E5E0DA", display:"flex", alignItems:"center", padding:"0 16px", gap:10, flexShrink:0 }}>
+          <span style={{ fontSize:12, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:"0.07em" }}>Saved Drafts</span>
+          <span style={{ fontSize:11.5, color:"#9CA3AF" }}>{drafts.length} of {MAX_DRAFTS}</span>
+        </div>
+
+        <div style={{ flex:1, overflow:"auto", padding:20 }}>
+          {drafts.length === 0 ? (
+            <div style={{ height:"100%", minHeight:320, display:"flex", alignItems:"center", justifyContent:"center", textAlign:"center", color:"#9CA3AF" }}>
+              <div>
+                <div style={{ width:52, height:52, borderRadius:"50%", background:"#fff", border:"1px solid #E5E0DA", display:"inline-flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D05A2C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>
+                  </svg>
+                </div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#4B5563", marginBottom:4 }}>No drafts saved</div>
+                <div style={{ fontSize:12.5 }}>Build an email, click Save Draft, and it will appear here.</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(240px, 1fr))", gap:12 }}>
+              {drafts.map((draft) => {
+                const isActive = draft.id === activeDraftId;
+                return (
+                  <div key={draft.id} style={{ background:"#fff", border:`1.5px solid ${isActive?ACC:"#E5E0DA"}`, borderRadius:8, overflow:"hidden" }}>
+                    <button
+                      onClick={() => onOpen(draft)}
+                      style={{ width:"100%", border:"none", background:"none", padding:"14px 14px 12px", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}
+                    >
+                      <div style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+                        <div style={{ width:34, height:34, borderRadius:7, background:isActive?"#FDF3EE":"#FAFAF9", display:"flex", alignItems:"center", justifyContent:"center", color:isActive?ACC:"#9CA3AF", flexShrink:0 }}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/>
+                          </svg>
+                        </div>
+                        <div style={{ minWidth:0, flex:1 }}>
+                          <div style={{ fontSize:13, fontWeight:700, color:"#1A1D2E", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:4 }}>{draft.name}</div>
+                          <div style={{ fontSize:11.5, color:"#9CA3AF", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                            {draft.subject || "No subject"}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12, fontSize:11.5, color:"#9CA3AF" }}>
+                        <span>{(draft.blocks || []).length} blocks</span>
+                        <span>{formatDraftDate(draft.updatedAt)}</span>
+                      </div>
+                    </button>
+                    <div style={{ borderTop:"1px solid #F0EDE8", display:"flex" }}>
+                      <button
+                        onClick={() => onOpen(draft)}
+                        style={{ flex:1, border:"none", background:"#FAFAF9", padding:"8px 0", fontSize:12, fontWeight:700, color:ACC, cursor:"pointer", fontFamily:"inherit" }}
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={() => onDelete(draft.id)}
+                        style={{ width:74, border:"none", borderLeft:"1px solid #F0EDE8", background:"#fff", padding:"8px 0", fontSize:12, fontWeight:600, color:"#DC2626", cursor:"pointer", fontFamily:"inherit" }}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatLine({ label, value }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"8px 10px", background:"#FAFAF9", border:"1px solid #EDE9E4", borderRadius:7 }}>
+      <span style={{ fontSize:12, color:"#9CA3AF", fontWeight:600 }}>{label}</span>
+      <span style={{ fontSize:12, color:"#D05A2C", fontWeight:800 }}>{value}</span>
     </div>
   );
 }

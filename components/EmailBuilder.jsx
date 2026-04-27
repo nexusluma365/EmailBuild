@@ -110,6 +110,14 @@ export default function EmailBuilder({ blocks, setBlocks, globalStyles, setGloba
   const [device, setDevice]         = useState("desktop");
   const [showPicker, setShowPicker] = useState(!blocks);
 
+  useEffect(() => {
+    if (!blocks) {
+      setShowPicker(true);
+      setSelectedId(null);
+      setPanelTab("design");
+    }
+  }, [blocks]);
+
   const sel = blocks?.find(b => b.id === selectedId) ?? null;
 
   const updBlock = (id, patch) =>
