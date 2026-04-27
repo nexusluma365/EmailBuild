@@ -2,6 +2,8 @@
 import { useState, useEffect } from "react";
 import { buildEmailHtmlFromBlocks } from "@/lib/emailTemplate";
 
+const SEND_BATCH_SIZE = 5;
+
 export default function SendPanel({ blocks, globalStyles, session }) {
   const [subs, setSubs] = useState([]);
   const [mode, setMode] = useState("campaign");
@@ -10,11 +12,21 @@ export default function SendPanel({ blocks, globalStyles, session }) {
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [contactsLoading, setContactsLoading] = useState(true);
+  const [contactsError, setContactsError] = useState("");
 
   useEffect(() => {
     fetch("/api/contacts")
-      .then((res) => res.json())
-      .then((data) => setSubs(data.contacts || []));
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Failed to load subscribers.");
+        const contacts = data.contacts || [];
+        setSubs(contacts);
+        setSelectedIds(contacts.map((contact) => contact.id));
+        setContactsError("");
+      })
+      .catch((err) => setContactsError(err.message || "Failed to load subscribers."))
+      .finally(() => setContactsLoading(false));
   }, []);
 
   const subjectBlock = blocks?.find((b) => b.type === "subject");
@@ -26,16 +38,16 @@ export default function SendPanel({ blocks, globalStyles, session }) {
     blocks && blocks.some((b) => ["headline", "text", "image", "button", "columns"].includes(b.type));
   const isReady = subject && hasContent;
 
-  async function sendOne(to) {
+  async function sendBatch(recipients) {
     const html = buildEmailHtmlFromBlocks(blocks || [], globalStyles || {});
     const res = await fetch("/api/send-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, html }),
+      body: JSON.stringify({ recipients, subject, html }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || "Unknown error");
-    return data;
+    return data.results || [];
   }
 
   async function handleSend() {
@@ -47,8 +59,12 @@ export default function SendPanel({ blocks, globalStyles, session }) {
       setSending(true);
       setResults([{ email: testEmail, status: "sending" }]);
       try {
-        await sendOne(testEmail);
-        setResults([{ email: testEmail, status: "sent" }]);
+        const [result] = await sendBatch([testEmail]);
+        if (result?.status === "sent") {
+          setResults([{ email: testEmail, status: "sent" }]);
+        } else {
+          setResults([{ email: testEmail, status: "error", message: result?.message || "Failed to send email." }]);
+        }
       } catch (err) {
         setResults([{ email: testEmail, status: "error", message: err.message }]);
       }
@@ -57,34 +73,38 @@ export default function SendPanel({ blocks, globalStyles, session }) {
       return;
     }
 
-    const audience =
-      selectedIds.length > 0 ? subs.filter((sub) => selectedIds.includes(sub.id)) : subs;
+    const selected = new Set(selectedIds);
+    const audience = subs.filter((sub) => selected.has(sub.id));
     if (audience.length === 0) return;
 
     setSending(true);
     setResults(audience.map((s) => ({ email: s.email, name: s.full_name, status: "pending" })));
 
-    for (let i = 0; i < audience.length; i += 1) {
-      const sub = audience[i];
+    for (let i = 0; i < audience.length; i += SEND_BATCH_SIZE) {
+      const batch = audience.slice(i, i + SEND_BATCH_SIZE);
+      const batchEmails = new Set(batch.map((sub) => sub.email));
       setResults((prev) =>
-        prev.map((row) => (row.email === sub.email ? { ...row, status: "sending" } : row))
+        prev.map((row) => (batchEmails.has(row.email) ? { ...row, status: "sending" } : row))
       );
+
       try {
-        await sendOne(sub.email);
+        const batchResults = await sendBatch(batch.map((sub) => sub.email));
+        const byEmail = new Map(batchResults.map((row) => [row.email, row]));
         setResults((prev) =>
-          prev.map((row) => (row.email === sub.email ? { ...row, status: "sent" } : row))
+          prev.map((row) => {
+            const result = byEmail.get(row.email);
+            if (!result) return row;
+            return {
+              ...row,
+              status: result.status === "sent" ? "sent" : "error",
+              message: result.message,
+            };
+          })
         );
       } catch (err) {
         setResults((prev) =>
-          prev.map((row) =>
-            row.email === sub.email
-              ? { ...row, status: "error", message: err.message }
-              : row
-          )
+          prev.map((row) => (batchEmails.has(row.email) ? { ...row, status: "error", message: err.message } : row))
         );
-      }
-      if (i < audience.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 400));
       }
     }
 
@@ -94,6 +114,9 @@ export default function SendPanel({ blocks, globalStyles, session }) {
 
   const sentCount = results.filter((r) => r.status === "sent").length;
   const errorCount = results.filter((r) => r.status === "error").length;
+  const selectedCount = selectedIds.length;
+  const allSelected = subs.length > 0 && selectedCount === subs.length;
+  const partiallySelected = selectedCount > 0 && selectedCount < subs.length;
   const ACC = "#D05A2C";
 
   return (
@@ -166,36 +189,56 @@ export default function SendPanel({ blocks, globalStyles, session }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em", color: "#9CA3AF" }}>Subscribers</div>
                 <span style={{ fontSize: 11, background: "#FDF3EE", color: ACC, borderRadius: 20, padding: "2px 8px", fontWeight: 600 }}>
-                  {selectedIds.length || subs.length}
+                  {selectedCount}
                 </span>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12.5, color: "#4B5563" }}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.length === 0}
-                  onChange={() => setSelectedIds([])}
-                />
-                Send to all subscribers
-              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4B5563", flex: 1 }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(node) => {
+                      if (node) node.indeterminate = partiallySelected;
+                    }}
+                    onChange={(e) => {
+                      setSelectedIds(e.target.checked ? subs.map((sub) => sub.id) : []);
+                    }}
+                    disabled={sending || contactsLoading || subs.length === 0}
+                  />
+                  Select all subscribers
+                </label>
+                {selectedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds([])}
+                    disabled={sending}
+                    style={{ border: "none", background: "none", color: "#9CA3AF", fontSize: 11.5, cursor: sending ? "not-allowed" : "pointer", fontFamily: "inherit" }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
 
               <div style={{ maxHeight: 220, overflowY: "auto", border: "1px solid #EDE9E4", borderRadius: 8, marginBottom: 12, background: "#FAFAF9" }}>
-                {subs.map((sub) => {
-                  const checked = selectedIds.length === 0 || selectedIds.includes(sub.id);
+                {contactsLoading ? (
+                  <div style={{ padding: "18px 12px", fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>Loading subscribers…</div>
+                ) : contactsError ? (
+                  <div style={{ padding: "18px 12px", fontSize: 12, color: "#DC2626", textAlign: "center" }}>{contactsError}</div>
+                ) : subs.length === 0 ? (
+                  <div style={{ padding: "18px 12px", fontSize: 12, color: "#9CA3AF", textAlign: "center" }}>No subscribers yet</div>
+                ) : subs.map((sub) => {
+                  const checked = selectedIds.includes(sub.id);
                   return (
                     <label key={sub.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid #F0EDE8", fontSize: 12 }}>
                       <input
                         type="checkbox"
                         checked={checked}
+                        disabled={sending}
                         onChange={(e) => {
-                          if (selectedIds.length === 0) {
-                            const allExcept = subs.filter((item) => item.id !== sub.id).map((item) => item.id);
-                            setSelectedIds(e.target.checked ? [] : allExcept);
-                            return;
-                          }
                           setSelectedIds((prev) =>
                             e.target.checked
-                              ? [...prev, sub.id]
+                              ? Array.from(new Set([...prev, sub.id]))
                               : prev.filter((id) => id !== sub.id)
                           );
                         }}
@@ -208,8 +251,8 @@ export default function SendPanel({ blocks, globalStyles, session }) {
                 })}
               </div>
 
-              <SendBtn onClick={handleSend} disabled={!isReady || subs.length === 0 || sending} sending={sending}>
-                Send to {selectedIds.length || subs.length} Recipient{(selectedIds.length || subs.length) !== 1 ? "s" : ""}
+              <SendBtn onClick={handleSend} disabled={!isReady || selectedCount === 0 || sending || contactsLoading} sending={sending}>
+                Send to {selectedCount} Recipient{selectedCount !== 1 ? "s" : ""}
               </SendBtn>
             </>
           )}
