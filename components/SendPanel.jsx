@@ -4,6 +4,14 @@ import { buildEmailHtmlFromBlocks } from "@/lib/emailTemplate";
 
 const SEND_BATCH_SIZE = 5;
 
+function parseRecipientInput(value) {
+  return String(value || "")
+    .split(/[\n,;]+/)
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((email, index, arr) => arr.indexOf(email) === index);
+}
+
 export default function SendPanel({ blocks, globalStyles, session }) {
   const [subs, setSubs] = useState([]);
   const [mode, setMode] = useState("campaign");
@@ -55,19 +63,41 @@ export default function SendPanel({ blocks, globalStyles, session }) {
     setDone(false);
 
     if (mode === "single") {
-      if (!testEmail) return;
+      const recipients = parseRecipientInput(testEmail);
+      if (!recipients.length) return;
       setSending(true);
-      setResults([{ email: testEmail, status: "sending" }]);
-      try {
-        const [result] = await sendBatch([testEmail]);
-        if (result?.status === "sent") {
-          setResults([{ email: testEmail, status: "sent" }]);
-        } else {
-          setResults([{ email: testEmail, status: "error", message: result?.message || "Failed to send email." }]);
+      setResults(recipients.map((email) => ({ email, status: "pending" })));
+
+      for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
+        const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
+        const batchEmails = new Set(batch);
+        setResults((prev) =>
+          prev.map((row) => (batchEmails.has(row.email) ? { ...row, status: "sending" } : row))
+        );
+
+        try {
+          const batchResults = await sendBatch(batch);
+          const byEmail = new Map(batchResults.map((row) => [row.email, row]));
+          setResults((prev) =>
+            prev.map((row) => {
+              const result = byEmail.get(row.email);
+              if (!result) return row;
+              return {
+                ...row,
+                status: result.status === "sent" ? "sent" : "error",
+                message: result.message,
+              };
+            })
+          );
+        } catch (err) {
+          setResults((prev) =>
+            prev.map((row) =>
+              batchEmails.has(row.email) ? { ...row, status: "error", message: err.message } : row
+            )
+          );
         }
-      } catch (err) {
-        setResults([{ email: testEmail, status: "error", message: err.message }]);
       }
+
       setSending(false);
       setDone(true);
       return;
@@ -121,7 +151,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
 
   return (
     <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-      <div style={{ width: 276, background: "#fff", borderRight: "1px solid #E5E0DA", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
+      <div style={{ width: 276, background: "#ffffff", borderRight: "1px solid #E5E0DA", display: "flex", flexDirection: "column", overflow: "hidden", flexShrink: 0 }}>
         <div style={{ display: "flex", borderBottom: "1px solid #E5E0DA" }}>
           {["single", "campaign"].map((t) => (
             <button
@@ -175,12 +205,12 @@ export default function SendPanel({ blocks, globalStyles, session }) {
                 type="email"
                 value={testEmail}
                 onChange={(e) => setTestEmail(e.target.value)}
-                placeholder="recipient@example.com"
+                placeholder="recipient@example.com, second@example.com"
                 className="field-input"
                 style={{ marginBottom: 10 }}
                 disabled={sending}
               />
-              <SendBtn onClick={handleSend} disabled={!isReady || !testEmail || sending} sending={sending}>
+              <SendBtn onClick={handleSend} disabled={!isReady || parseRecipientInput(testEmail).length === 0 || sending} sending={sending}>
                 Send Email
               </SendBtn>
             </>
@@ -260,7 +290,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
       </div>
 
       <div className="canvas-bg" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ height: 44, background: "#fff", borderBottom: "1px solid #E5E0DA", display: "flex", alignItems: "center", padding: "0 16px", gap: 12, flexShrink: 0 }}>
+        <div style={{ height: 44, background: "#ffffff", borderBottom: "1px solid #E5E0DA", display: "flex", alignItems: "center", padding: "0 16px", gap: 12, flexShrink: 0 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", textTransform: "uppercase", letterSpacing: "0.07em" }}>Send Results</span>
           {done && results.length > 0 && (
             <div style={{ display: "flex", gap: 10 }}>
@@ -276,7 +306,7 @@ export default function SendPanel({ blocks, globalStyles, session }) {
               <p style={{ fontSize: 13, color: "#C5B8AC", fontWeight: 500 }}>No emails sent yet</p>
             </div>
           ) : (
-            <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #E5E0DA", overflow: "hidden" }}>
+            <div style={{ background: "#ffffff", borderRadius: 10, border: "1px solid #E5E0DA", overflow: "hidden" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: "#FAFAF9", borderBottom: "1px solid #EDE9E4" }}>
@@ -318,7 +348,7 @@ function SendBtn({ onClick, disabled, sending, children }) {
         width: "100%",
         padding: "9px 0",
         background: disabled ? "#EDE9E4" : ACC,
-        color: disabled ? "#9CA3AF" : "#fff",
+        color: disabled ? "#9CA3AF" : "#ffffff",
         border: "none",
         borderRadius: 6,
         fontSize: 12.5,
