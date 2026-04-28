@@ -1,5 +1,6 @@
 import { getToken } from "next-auth/jwt";
 import { computeNextRunAt, normalizeScheduleConfig } from "@/lib/campaigns";
+import { DRAFT_AUDIENCE_SOURCE } from "@/lib/drafts";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function requireUserEmail(req) {
@@ -18,6 +19,7 @@ export async function GET(req) {
       .from("campaigns")
       .select("*")
       .eq("owner_email", userEmail)
+      .neq("audience_source", DRAFT_AUDIENCE_SOURCE)
       .order("created_at", { ascending: false });
 
     if (error) throw error;

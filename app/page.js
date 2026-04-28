@@ -14,6 +14,7 @@ const DRAFTS_STORE = "drafts";
 const DRAFTS_RECORD_ID = "drafts";
 const MAX_DRAFTS = 5;
 const makeDraftId = () => `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const isLocalDraftId = (id) => String(id || "").startsWith("draft_");
 
 function cloneBlocks(blocks = []) {
   return JSON.parse(JSON.stringify(blocks || []));
@@ -23,7 +24,7 @@ function getDraftTitle(blocks = []) {
   const subject = blocks.find((block) => block.type === "subject")?.data?.text?.trim();
   const headline = blocks.find((block) => block.type === "headline")?.data?.text?.trim();
   const header = blocks.find((block) => block.type === "header")?.data?.logoText?.trim();
-  return (subject || headline || header || "Untitled Draft").slice(0, 80);
+  return (subject || headline || header || "Untitled Template").slice(0, 80);
 }
 
 function formatDraftDate(value) {
@@ -132,10 +133,35 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    readDraftsFromStorage().then((storedDrafts) => {
-      if (storedDrafts.length) setDrafts(storedDrafts.slice(0, MAX_DRAFTS));
-    });
-  }, []);
+    let cancelled = false;
+
+    async function loadDrafts() {
+      const storedDrafts = await readDraftsFromStorage();
+      if (!cancelled && storedDrafts.length) {
+        setDrafts(storedDrafts.slice(0, MAX_DRAFTS));
+      }
+
+      if (!session) return;
+
+      try {
+        const res = await fetch("/api/drafts");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Failed to load templates.");
+        const serverDrafts = data.drafts || [];
+        if (!cancelled) {
+          setDrafts(serverDrafts);
+          await writeDraftsToStorage(serverDrafts);
+        }
+      } catch (error) {
+        console.warn("Could not load server templates:", error);
+      }
+    }
+
+    loadDrafts();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   // null = show template picker; populated = email blocks array
   const [blocks, setBlocks] = useState(() => {
@@ -175,10 +201,31 @@ export default function HomePage() {
     await writeDraftsToStorage(nextDrafts);
   };
 
+  async function saveDraftToServer(draft) {
+    const isUpdate = draft.id && !isLocalDraftId(draft.id);
+    const res = await fetch(isUpdate ? `/api/drafts/${draft.id}` : "/api/drafts", {
+      method: isUpdate ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "Failed to save template.");
+    return data.draft;
+  }
+
+  async function deleteDraftFromServer(id) {
+    if (!id || isLocalDraftId(id)) return;
+    const res = await fetch(`/api/drafts/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete template.");
+    }
+  }
+
   const showToast = (message) => {
     const toast = document.createElement("div");
     toast.textContent = message;
-    Object.assign(toast.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)", background:"#1A1D2E", color:"#fff", padding:"9px 20px", borderRadius:"8px", fontSize:"13px", fontWeight:"600", zIndex:"9999", boxShadow:"0 4px 20px rgba(0,0,0,0.2)", transition:"opacity 0.3s" });
+    Object.assign(toast.style, { position:"fixed", bottom:"20px", left:"50%", transform:"translateX(-50%)", background:"#1A1D2E", color:"#ffffff", padding:"9px 20px", borderRadius:"8px", fontSize:"13px", fontWeight:"600", zIndex:"9999", boxShadow:"0 4px 20px rgba(0,0,0,0.2)", transition:"opacity 0.3s" });
     document.body.appendChild(toast);
     setTimeout(() => { toast.style.opacity="0"; setTimeout(() => toast.remove(), 300); }, 2000);
   };
@@ -186,7 +233,7 @@ export default function HomePage() {
   const handleSave = async () => {
     try {
       if (!blocks || blocks.length === 0) {
-        alert("Create an email before saving a draft.");
+        alert("Create an email before saving a template.");
         return;
       }
 
@@ -197,44 +244,45 @@ export default function HomePage() {
         : -1;
       let nextDrafts;
 
+      const draftPayload = {
+        id: existingIndex >= 0 ? drafts[existingIndex].id : makeDraftId(),
+        name: draftName,
+        subject,
+        blocks: cloneBlocks(blocks),
+        globalStyles: { ...globalStyles },
+        createdAt: existingIndex >= 0 ? drafts[existingIndex].createdAt : now,
+        updatedAt: now,
+      };
+
+      let savedDraft = draftPayload;
+      try {
+        savedDraft = await saveDraftToServer(draftPayload);
+      } catch (error) {
+        console.warn("Server template save failed, using browser fallback:", error);
+        if (existingIndex < 0 && drafts.length >= MAX_DRAFTS) {
+          alert(`You can save up to ${MAX_DRAFTS} templates. Delete one before saving another.`);
+          return;
+        }
+      }
+
       if (existingIndex >= 0) {
-        nextDrafts = drafts.map((draft, index) =>
-          index === existingIndex
-            ? {
-                ...draft,
-                name: draftName,
-                subject,
-                blocks: cloneBlocks(blocks),
-                globalStyles: { ...globalStyles },
-                updatedAt: now,
-              }
-            : draft
-        );
+        nextDrafts = drafts.map((draft, index) => (index === existingIndex ? savedDraft : draft));
       } else {
         if (drafts.length >= MAX_DRAFTS) {
-          alert(`You can save up to ${MAX_DRAFTS} drafts. Delete one before saving another.`);
+          alert(`You can save up to ${MAX_DRAFTS} templates. Delete one before saving another.`);
           return;
         }
 
-        const newDraft = {
-          id: makeDraftId(),
-          name: draftName,
-          subject,
-          blocks: cloneBlocks(blocks),
-          globalStyles: { ...globalStyles },
-          createdAt: now,
-          updatedAt: now,
-        };
-        nextDrafts = [newDraft, ...drafts].slice(0, MAX_DRAFTS);
-        setActiveDraftId(newDraft.id);
+        nextDrafts = [savedDraft, ...drafts].slice(0, MAX_DRAFTS);
       }
 
+      setActiveDraftId(savedDraft.id);
       await persistDrafts(nextDrafts);
       if (blocks) safeSetLocalStorage("email_studio_blocks_v2", JSON.stringify(blocks));
       safeSetLocalStorage("email_studio_styles_v2", JSON.stringify(globalStyles));
-      showToast("Draft saved");
+      showToast("Template saved");
     } catch(e) {
-      alert("Could not save draft.");
+      alert("Could not save template.");
     }
   };
 
@@ -245,12 +293,19 @@ export default function HomePage() {
     safeSetLocalStorage("email_studio_blocks_v2", JSON.stringify(draft.blocks || []));
     safeSetLocalStorage("email_studio_styles_v2", JSON.stringify(draft.globalStyles || DEFAULT_STYLES));
     setActiveSection("builder");
-    showToast("Draft opened");
+    showToast("Template opened");
   };
 
   const deleteDraft = async (id) => {
     const draft = drafts.find((item) => item.id === id);
     if (!draft || !window.confirm(`Delete "${draft.name}"?`)) return;
+    try {
+      await deleteDraftFromServer(id);
+    } catch (error) {
+      console.warn("Server template delete failed:", error);
+      alert(error.message || "Could not delete template.");
+      return;
+    }
     const nextDrafts = drafts.filter((item) => item.id !== id);
     await persistDrafts(nextDrafts);
     if (activeDraftId === id) setActiveDraftId(null);
@@ -320,17 +375,17 @@ export default function HomePage() {
 
 /* ─── TOP BAR ─────────────────────────────────────────── */
 function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPreview, onSave, onSignOut, onReconnect }) {
-  const sectionLabel = { builder:"Email Builder", drafts:"Saved Drafts", subscribers:"Subscribers", campaigns:"Campaigns", send:"Send Live" };
+  const sectionLabel = { builder:"Email Builder", drafts:"Saved Templates", subscribers:"Subscribers", campaigns:"Campaigns", send:"Send Live" };
   const ACC = "#D05A2C";
 
   const iconBtns = [
-    { id:"save",    label:"Save Draft",         onClick:onSave,    d:<><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></> },
+    { id:"save",    label:"Save Template",      onClick:onSave,    d:<><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17,21 17,13 7,13 7,21"/><polyline points="7,3 7,8 15,8"/></> },
     { id:"preview", label:"Preview in Browser", onClick:onPreview, d:<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></> },
     { id:"send",    label:"Go to Send",         onClick:onPublish, d:<><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22,2 15,22 11,13 2,9"/></> },
   ];
 
   return (
-    <header style={{ height:52, background:"#fff", borderBottom:"1px solid #E5E0DA", display:"flex", alignItems:"center", padding:"0 14px", gap:8, flexShrink:0, zIndex:50 }}>
+    <header style={{ height:52, background:"#ffffff", borderBottom:"1px solid #E5E0DA", display:"flex", alignItems:"center", padding:"0 14px", gap:8, flexShrink:0, zIndex:50 }}>
       {/* Logo */}
       <div style={{ width:32, height:32, borderRadius:"50%", background:"#1A1D2E", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
@@ -342,7 +397,7 @@ function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPre
       <div style={{ marginRight:6 }}>
         <div style={{ fontWeight:700, fontSize:13, color:"#1A1D2E", lineHeight:1.2 }}>{sectionLabel[activeSection] || "Email Studio"}</div>
         <div style={{ fontSize:11, color:"#9CA3AF", lineHeight:1.2, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-          {activeDraft ? `Draft: ${activeDraft.name}` : subject ? `Subject: ${subject}` : "No subject yet"}
+          {activeDraft ? `Template: ${activeDraft.name}` : subject ? `Subject: ${subject}` : "No subject yet"}
         </div>
       </div>
 
@@ -352,7 +407,7 @@ function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPre
       <div style={{ display:"flex", gap:4 }}>
         {iconBtns.map(({ id, label, d, onClick }) => (
           <button key={id} title={label} onClick={onClick}
-            style={{ height:34, padding:"0 12px", borderRadius:7, border:"1px solid #E5E0DA", background:"#fff", cursor:"pointer", display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:500, color:"#374151", fontFamily:"inherit" }}
+            style={{ height:34, padding:"0 12px", borderRadius:7, border:"1px solid #E5E0DA", background:"#ffffff", cursor:"pointer", display:"flex", alignItems:"center", gap:6, fontSize:12, fontWeight:500, color:"#374151", fontFamily:"inherit" }}
             onMouseEnter={e=>{ e.currentTarget.style.borderColor=ACC; e.currentTarget.style.color=ACC; e.currentTarget.style.background="#FDF3EE"; }}
             onMouseLeave={e=>{ e.currentTarget.style.borderColor="#E5E0DA"; e.currentTarget.style.color="#374151"; e.currentTarget.style.background="#fff"; }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
@@ -363,7 +418,7 @@ function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPre
 
       {/* Publish */}
       <button onClick={onPublish}
-        style={{ background:ACC, color:"#fff", border:"none", borderRadius:7, padding:"8px 18px", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", letterSpacing:"0.01em" }}
+        style={{ background:ACC, color:"#ffffff", border:"none", borderRadius:7, padding:"8px 18px", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", letterSpacing:"0.01em" }}
         onMouseEnter={e=>e.currentTarget.style.background="#B84E25"}
         onMouseLeave={e=>e.currentTarget.style.background=ACC}>
         Send →
@@ -381,19 +436,19 @@ function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPre
 
       {/* Avatar pill */}
       <div style={{ display:"flex", alignItems:"center", gap:7, padding:"4px 10px 4px 4px", background:"linear-gradient(135deg,#3730A3,#D05A2C)", borderRadius:99, cursor:"pointer" }}>
-        <div style={{ width:26, height:26, borderRadius:"50%", background:"rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#fff" }}>
+        <div style={{ width:26, height:26, borderRadius:"50%", background:"rgba(255,255,255,0.22)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#ffffff" }}>
           {(session.user?.name||"U").charAt(0).toUpperCase()}
         </div>
-        <span style={{ fontSize:12, fontWeight:500, color:"#fff", maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+        <span style={{ fontSize:12, fontWeight:500, color:"#ffffff", maxWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
           {(session.user?.name||"User").split(" ")[0]}
         </span>
       </div>
 
       <button
         onClick={onSignOut}
-        style={{ background:"#fff", color:"#6B7280", border:"1px solid #E5E0DA", borderRadius:7, padding:"8px 12px", fontWeight:600, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}
+        style={{ background:"#ffffff", color:"#6B7280", border:"1px solid #E5E0DA", borderRadius:7, padding:"8px 12px", fontWeight:600, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}
         onMouseEnter={e=>{ e.currentTarget.style.borderColor=ACC; e.currentTarget.style.color=ACC; e.currentTarget.style.background="#FDF3EE"; }}
-        onMouseLeave={e=>{ e.currentTarget.style.borderColor="#E5E0DA"; e.currentTarget.style.color="#6B7280"; e.currentTarget.style.background="#fff"; }}>
+        onMouseLeave={e=>{ e.currentTarget.style.borderColor="#E5E0DA"; e.currentTarget.style.color="#6B7280"; e.currentTarget.style.background="#ffffff"; }}>
         Sign Out
       </button>
     </header>
@@ -404,19 +459,19 @@ function TopBar({ session, activeSection, subject, activeDraft, onPublish, onPre
 function IconRail({ activeSection, setActiveSection, onSignOut }) {
   const items = [
     { id:"builder",     label:"Builder",     d:<><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></> },
-    { id:"drafts",      label:"Drafts",      d:<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></> },
+    { id:"drafts",      label:"Templates",   d:<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></> },
     { id:"subscribers", label:"Subscribers", d:<><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></> },
     { id:"campaigns",   label:"Campaigns",   d:<><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></> },
     { id:"send",        label:"Send",        d:<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></> },
   ];
 
   return (
-    <div style={{ width:56, background:"#fff", borderRight:"1px solid #E5E0DA", display:"flex", flexDirection:"column", alignItems:"center", padding:"10px 0", flexShrink:0 }}>
+    <div style={{ width:56, background:"#ffffff", borderRight:"1px solid #E5E0DA", display:"flex", flexDirection:"column", alignItems:"center", padding:"10px 0", flexShrink:0 }}>
       {items.map(({ id, label, d }) => {
         const isActive = activeSection === id;
         return (
           <button key={id} onClick={() => setActiveSection(id)} title={label}
-            style={{ width:40, height:40, borderRadius:10, border:"none", background:isActive?"#D05A2C":"none", color:isActive?"#fff":"#6B7280", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4, transition:"all 0.15s" }}
+            style={{ width:40, height:40, borderRadius:10, border:"none", background:isActive?"#D05A2C":"none", color:isActive?"#ffffff":"#6B7280", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:4, transition:"all 0.15s" }}
             onMouseEnter={e=>{ if(!isActive) e.currentTarget.style.background="#F4EFE9"; }}
             onMouseLeave={e=>{ if(!isActive) e.currentTarget.style.background="none"; }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
@@ -442,22 +497,22 @@ function DraftsLibrary({ drafts, activeDraftId, onOpen, onDelete, onCreate }) {
 
   return (
     <div style={{ flex:1, display:"flex", overflow:"hidden" }}>
-      <div style={{ width:276, background:"#fff", borderRight:"1px solid #E5E0DA", display:"flex", flexDirection:"column", flexShrink:0 }}>
+      <div style={{ width:276, background:"#ffffff", borderRight:"1px solid #E5E0DA", display:"flex", flexDirection:"column", flexShrink:0 }}>
         <div style={{ padding:"16px 14px", borderBottom:"1px solid #EDE9E4" }}>
-          <div style={{ fontSize:10.5, fontWeight:700, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Draft Library</div>
+          <div style={{ fontSize:10.5, fontWeight:700, color:"#9CA3AF", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Template Library</div>
           <div style={{ fontSize:13, color:"#4B5563", lineHeight:1.5, marginBottom:14 }}>
-            Save up to {MAX_DRAFTS} email drafts and reopen them later.
+            Save up to {MAX_DRAFTS} email templates to your account and reopen them later.
           </div>
           <button
             onClick={onCreate}
             disabled={!canCreate}
-            style={{ width:"100%", padding:"9px 0", background:canCreate?ACC:"#EDE9E4", color:canCreate?"#fff":"#9CA3AF", border:"none", borderRadius:6, fontSize:12.5, fontWeight:700, cursor:canCreate?"pointer":"not-allowed", fontFamily:"inherit" }}
+            style={{ width:"100%", padding:"9px 0", background:canCreate?ACC:"#EDE9E4", color:canCreate?"#ffffff":"#9CA3AF", border:"none", borderRadius:6, fontSize:12.5, fontWeight:700, cursor:canCreate?"pointer":"not-allowed", fontFamily:"inherit" }}
           >
-            New Draft
+            New Template
           </button>
           {!canCreate && (
             <div style={{ marginTop:8, fontSize:11.5, color:"#9CA3AF", lineHeight:1.4 }}>
-              Delete a draft before creating another.
+              Delete a template before creating another.
             </div>
           )}
         </div>
@@ -468,8 +523,8 @@ function DraftsLibrary({ drafts, activeDraftId, onOpen, onDelete, onCreate }) {
       </div>
 
       <div className="canvas-bg" style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-        <div style={{ height:44, background:"#fff", borderBottom:"1px solid #E5E0DA", display:"flex", alignItems:"center", padding:"0 16px", gap:10, flexShrink:0 }}>
-          <span style={{ fontSize:12, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:"0.07em" }}>Saved Drafts</span>
+        <div style={{ height:44, background:"#ffffff", borderBottom:"1px solid #E5E0DA", display:"flex", alignItems:"center", padding:"0 16px", gap:10, flexShrink:0 }}>
+          <span style={{ fontSize:12, fontWeight:700, color:"#6B7280", textTransform:"uppercase", letterSpacing:"0.07em" }}>Saved Templates</span>
           <span style={{ fontSize:11.5, color:"#9CA3AF" }}>{drafts.length} of {MAX_DRAFTS}</span>
         </div>
 
@@ -477,13 +532,13 @@ function DraftsLibrary({ drafts, activeDraftId, onOpen, onDelete, onCreate }) {
           {drafts.length === 0 ? (
             <div style={{ height:"100%", minHeight:320, display:"flex", alignItems:"center", justifyContent:"center", textAlign:"center", color:"#9CA3AF" }}>
               <div>
-                <div style={{ width:52, height:52, borderRadius:"50%", background:"#fff", border:"1px solid #E5E0DA", display:"inline-flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
+                <div style={{ width:52, height:52, borderRadius:"50%", background:"#ffffff", border:"1px solid #E5E0DA", display:"inline-flex", alignItems:"center", justifyContent:"center", marginBottom:12 }}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#D05A2C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>
                   </svg>
                 </div>
-                <div style={{ fontSize:14, fontWeight:700, color:"#4B5563", marginBottom:4 }}>No drafts saved</div>
-                <div style={{ fontSize:12.5 }}>Build an email, click Save Draft, and it will appear here.</div>
+                <div style={{ fontSize:14, fontWeight:700, color:"#4B5563", marginBottom:4 }}>No templates saved</div>
+                <div style={{ fontSize:12.5 }}>Build an email, click Save Template, and it will appear here.</div>
               </div>
             </div>
           ) : (
@@ -491,7 +546,7 @@ function DraftsLibrary({ drafts, activeDraftId, onOpen, onDelete, onCreate }) {
               {drafts.map((draft) => {
                 const isActive = draft.id === activeDraftId;
                 return (
-                  <div key={draft.id} style={{ background:"#fff", border:`1.5px solid ${isActive?ACC:"#E5E0DA"}`, borderRadius:8, overflow:"hidden" }}>
+                  <div key={draft.id} style={{ background:"#ffffff", border:`1.5px solid ${isActive?ACC:"#E5E0DA"}`, borderRadius:8, overflow:"hidden" }}>
                     <button
                       onClick={() => onOpen(draft)}
                       style={{ width:"100%", border:"none", background:"none", padding:"14px 14px 12px", textAlign:"left", cursor:"pointer", fontFamily:"inherit" }}
@@ -523,7 +578,7 @@ function DraftsLibrary({ drafts, activeDraftId, onOpen, onDelete, onCreate }) {
                       </button>
                       <button
                         onClick={() => onDelete(draft.id)}
-                        style={{ width:74, border:"none", borderLeft:"1px solid #F0EDE8", background:"#fff", padding:"8px 0", fontSize:12, fontWeight:600, color:"#DC2626", cursor:"pointer", fontFamily:"inherit" }}
+                        style={{ width:74, border:"none", borderLeft:"1px solid #F0EDE8", background:"#ffffff", padding:"8px 0", fontSize:12, fontWeight:600, color:"#DC2626", cursor:"pointer", fontFamily:"inherit" }}
                       >
                         Delete
                       </button>
@@ -553,7 +608,7 @@ function LandingPage({ onSignIn }) {
   return (
     <div style={{ minHeight:"100vh", background:"#F4EFE9", backgroundImage:"radial-gradient(circle, #C5B8AC 1.2px, transparent 1.2px)", backgroundSize:"22px 22px", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
       <div style={{ width:"100%", maxWidth:420 }}>
-        <div style={{ background:"#fff", borderRadius:14, boxShadow:"0 8px 40px rgba(0,0,0,0.12)", overflow:"hidden" }}>
+        <div style={{ background:"#ffffff", borderRadius:14, boxShadow:"0 8px 40px rgba(0,0,0,0.12)", overflow:"hidden" }}>
           <div style={{ height:4, background:"#D05A2C" }}/>
           <div style={{ padding:"40px 40px 36px" }}>
             <div style={{ width:52, height:52, borderRadius:"50%", background:"#1A1D2E", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:20 }}>
@@ -572,9 +627,9 @@ function LandingPage({ onSignIn }) {
               </div>
             ))}
             <button onClick={onSignIn}
-              style={{ marginTop:22, width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:"11px 20px", background:"#fff", border:"1.5px solid #E5E0DA", borderRadius:6, cursor:"pointer", fontFamily:"inherit", fontSize:13.5, fontWeight:600, color:"#1A1D2E" }}
+              style={{ marginTop:22, width:"100%", display:"flex", alignItems:"center", justifyContent:"center", gap:10, padding:"11px 20px", background:"#ffffff", border:"1.5px solid #E5E0DA", borderRadius:6, cursor:"pointer", fontFamily:"inherit", fontSize:13.5, fontWeight:600, color:"#1A1D2E" }}
               onMouseEnter={e=>{ e.currentTarget.style.borderColor="#D05A2C"; e.currentTarget.style.background="#FDF3EE"; }}
-              onMouseLeave={e=>{ e.currentTarget.style.borderColor="#E5E0DA"; e.currentTarget.style.background="#fff"; }}>
+              onMouseLeave={e=>{ e.currentTarget.style.borderColor="#E5E0DA"; e.currentTarget.style.background="#ffffff"; }}>
               <GoogleIcon/>
               Continue with Google
             </button>

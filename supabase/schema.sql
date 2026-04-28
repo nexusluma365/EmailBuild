@@ -34,6 +34,7 @@ create table if not exists campaigns (
 
 alter table campaigns add column if not exists recipient_mode text not null default 'all';
 alter table campaigns add column if not exists selected_contact_ids jsonb not null default '[]'::jsonb;
+alter table campaigns add column if not exists audience_source text not null default 'contacts';
 alter table campaigns add column if not exists schedule_enabled boolean not null default false;
 alter table campaigns add column if not exists schedule_config jsonb not null default '{"frequency":"manual","intervalHours":24,"weeklyDays":[1]}'::jsonb;
 alter table campaigns add column if not exists next_run_at timestamptz;

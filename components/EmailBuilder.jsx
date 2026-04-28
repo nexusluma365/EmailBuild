@@ -434,7 +434,7 @@ function BlockFields({block,onUpdate}) {
       <Fld label="Subject Line">
         <input type="text" value={data.text} onChange={e=>u("text",e.target.value)} placeholder="Your subject…" className="field-input"/>
       </Fld>
-      <p style={{fontSize:11,color:MUT,marginTop:-4}}>Shown in the recipient's inbox preview.</p>
+      <p style={{fontSize:11,color:MUT,marginTop:-4}}>Shown in the recipient&apos;s inbox preview.</p>
     </>);
 
     case "header": return (<>
@@ -641,9 +641,14 @@ function ImgUpload({src,onSrc,small}) {
         onMouseLeave={e=>{e.currentTarget.style.borderColor=BRD;e.currentTarget.style.color="#6B7280";e.currentTarget.style.background="#FAFAF9";}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="16,16 12,12 8,16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg>
         Upload from Computer
-        <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+        <input type="file" accept="image/*" style={{display:"none"}} onChange={async e=>{
           const f=e.target.files?.[0]; if(!f) return;
-          const r=new FileReader(); r.onload=ev=>onSrc(ev.target.result); r.readAsDataURL(f); e.target.value="";
+          try {
+            onSrc(await imageFileToDataUrl(f));
+          } catch {
+            const r=new FileReader(); r.onload=ev=>onSrc(ev.target.result); r.readAsDataURL(f);
+          }
+          e.target.value="";
         }}/>
       </label>
       <input type="url" value={src||""} onChange={e=>onSrc(e.target.value)} placeholder="Or paste image URL…" className="field-input" style={{fontSize:11.5}}/>
@@ -957,6 +962,41 @@ function normalizeLink(value) {
   if (!raw || raw === "https://") return "";
   if (/^(https?:|mailto:|tel:)/i.test(raw)) return raw;
   return `https://${raw.replace(/^\/+/, "")}`;
+}
+
+function imageFileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/") || file.type === "image/gif" || file.type === "image/svg+xml") {
+      const reader = new FileReader();
+      reader.onload = (event) => resolve(event.target.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 1200;
+        const scale = Math.min(1, maxWidth / img.width);
+        const width = Math.max(1, Math.round(img.width * scale));
+        const height = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.onerror = reject;
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
 
 function normalizeHexColor(value) {

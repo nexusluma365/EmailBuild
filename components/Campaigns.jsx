@@ -97,7 +97,7 @@ export default function Campaigns({ blocks, globalStyles }) {
 
     setCampaigns((prev) => [data.campaign, ...prev]);
     setName("");
-    setMessage("Campaign created from the current draft.");
+    setMessage("Campaign created from the current template.");
   }
 
   async function patchCampaign(id, patch, successMessage) {
@@ -184,7 +184,7 @@ export default function Campaigns({ blocks, globalStyles }) {
           disabled={!hasSendableDraft || busyId === "create"}
           style={primaryButton(!hasSendableDraft || busyId === "create")}
         >
-          {busyId === "create" ? "Creating…" : "Save Current Draft as Campaign"}
+          {busyId === "create" ? "Creating…" : "Save Current Template as Campaign"}
         </button>
 
         <SectionLabel>Subscriber Sources</SectionLabel>
@@ -207,7 +207,7 @@ export default function Campaigns({ blocks, globalStyles }) {
         {loading ? (
           <div style={emptyState}>Loading campaigns…</div>
         ) : campaigns.length === 0 ? (
-          <div style={emptyState}>No campaigns yet. Save a builder draft here first.</div>
+          <div style={emptyState}>No campaigns yet. Save a builder template here first.</div>
         ) : (
           <div style={{ display: "grid", gap: 14 }}>
             {campaigns.map((campaign) => {
@@ -249,13 +249,13 @@ export default function Campaigns({ blocks, globalStyles }) {
                             global_styles: globalStyles,
                             subject,
                           },
-                          "Campaign content updated from the current draft."
+                          "Campaign content updated from the current template."
                         )
                       }
                       disabled={!hasSendableDraft || busyId === campaign.id}
                       style={secondaryButton(!hasSendableDraft || busyId === campaign.id)}
                     >
-                      Use Current Draft
+                      Use Current Template
                     </button>
                   </div>
 
