@@ -52,7 +52,7 @@ export async function POST(req) {
       blocks,
       global_styles: body.global_styles || body.globalStyles || {},
       status: body.status || "draft",
-      audience_source: "contacts",
+      audience_source: body.audience_source || body.audienceSource || "contacts",
       recipient_mode: body.recipientMode || "all",
       selected_contact_ids: body.selectedContactIds || [],
       schedule_enabled: Boolean(body.scheduleEnabled),

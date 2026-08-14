@@ -20,10 +20,20 @@ const WEEKDAYS = [
   { value: 6, label: "Sat" },
 ];
 
+const FOLLOWUP_CONTACT_SOURCE = "followup_gscript";
+const FOLLOWUP_SCHEDULE = {
+  frequency: "hourly_interval",
+  intervalHours: 48,
+  weeklyDays: [1],
+};
+
 export default function Campaigns({ blocks, globalStyles }) {
   const [campaigns, setCampaigns] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [name, setName] = useState("");
+  const [followupTemplateId, setFollowupTemplateId] = useState("");
+  const [followupName, setFollowupName] = useState("Follow-up Emails");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
@@ -37,13 +47,15 @@ export default function Campaigns({ blocks, globalStyles }) {
 
   async function loadCampaigns() {
     setLoading(true);
-    const [campaignRes, contactRes] = await Promise.all([
+    const [campaignRes, contactRes, templateRes] = await Promise.all([
       fetch("/api/campaigns"),
-      fetch("/api/contacts"),
+      fetch("/api/contacts?includeFollowups=1"),
+      fetch("/api/drafts"),
     ]);
-    const [campaignData, contactData] = await Promise.all([
+    const [campaignData, contactData, templateData] = await Promise.all([
       campaignRes.json(),
       contactRes.json(),
+      templateRes.json(),
     ]);
 
     if (campaignRes.ok) setCampaigns(campaignData.campaigns || []);
@@ -51,6 +63,14 @@ export default function Campaigns({ blocks, globalStyles }) {
 
     if (contactRes.ok) setContacts(contactData.contacts || []);
     else setMessage(contactData.error || "Failed to load subscribers.");
+
+    if (templateRes.ok) {
+      const loadedTemplates = templateData.drafts || [];
+      setTemplates(loadedTemplates);
+      setFollowupTemplateId((current) => current || loadedTemplates[0]?.id || "");
+    } else {
+      setMessage(templateData.error || "Failed to load templates.");
+    }
 
     setLoading(false);
   }
@@ -153,9 +173,73 @@ export default function Campaigns({ blocks, globalStyles }) {
     loadCampaigns();
   }
 
+  async function syncFollowups() {
+    setBusyId("followup-sync");
+    const res = await fetch("/api/followups/sync", { method: "POST" });
+    const data = await res.json();
+    setBusyId("");
+
+    if (!res.ok) {
+      setMessage(data.error || "Failed to sync follow-up list.");
+      return;
+    }
+
+    setMessage(
+      `Synced ${data.totalSynced} follow-up contact(s). ${data.importedCount} new.`
+    );
+    loadCampaigns();
+  }
+
+  async function createFollowupCampaign() {
+    const template = templates.find((item) => item.id === followupTemplateId);
+    if (!template) {
+      setMessage("Choose a saved template for the follow-up campaign.");
+      return;
+    }
+
+    const scheduleConfig = {
+      ...FOLLOWUP_SCHEDULE,
+      startAt: new Date().toISOString(),
+    };
+
+    setBusyId("followup-create");
+    const res = await fetch("/api/campaigns", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: followupName.trim() || "Follow-up Emails",
+        subject: template.subject,
+        blocks: template.blocks || [],
+        globalStyles: template.globalStyles || {},
+        status: "draft",
+        recipientMode: "all",
+        selectedContactIds: [],
+        audience_source: FOLLOWUP_CONTACT_SOURCE,
+        scheduleEnabled: true,
+        scheduleConfig,
+      }),
+    });
+    const data = await res.json();
+    setBusyId("");
+
+    if (!res.ok) {
+      setMessage(data.error || "Failed to create follow-up campaign.");
+      return;
+    }
+
+    setCampaigns((prev) => [data.campaign, ...prev]);
+    setMessage("Follow-up campaign created. Toggle Active on when you are ready.");
+  }
+
   const contactLookup = useMemo(
     () => new Map(contacts.map((contact) => [contact.id, contact])),
     [contacts]
+  );
+  const followupContacts = contacts.filter(
+    (contact) => contact.source === FOLLOWUP_CONTACT_SOURCE
+  );
+  const followupCampaigns = campaigns.filter(
+    (campaign) => campaign.audience_source === FOLLOWUP_CONTACT_SOURCE
   );
 
   return (
@@ -200,6 +284,60 @@ export default function Campaigns({ blocks, globalStyles }) {
           {busyId === "sync" ? "Importing…" : "Import Referrals into Subscribers"}
         </button>
 
+        <SectionLabel>Follow-up Campaign</SectionLabel>
+        <p style={smallText}>
+          Pulls Name and Email from the credit repair Apps Script into a separate
+          list, then sends the selected saved template every 2 days.
+        </p>
+        <button
+          onClick={syncFollowups}
+          disabled={busyId === "followup-sync"}
+          style={secondaryButton(busyId === "followup-sync")}
+        >
+          {busyId === "followup-sync"
+            ? "Syncing…"
+            : `Sync Follow-up List (${followupContacts.length})`}
+        </button>
+        <input
+          type="text"
+          value={followupName}
+          onChange={(e) => setFollowupName(e.target.value)}
+          placeholder="Follow-up campaign name"
+          className="field-input"
+          style={{ marginTop: 10, marginBottom: 8 }}
+        />
+        <select
+          value={followupTemplateId}
+          onChange={(e) => setFollowupTemplateId(e.target.value)}
+          className="field-input"
+          style={{ marginBottom: 8 }}
+        >
+          {templates.length === 0 ? (
+            <option value="">No saved templates yet</option>
+          ) : (
+            templates.map((template) => (
+              <option key={template.id} value={template.id}>
+                {template.name}
+              </option>
+            ))
+          )}
+        </select>
+        <button
+          onClick={createFollowupCampaign}
+          disabled={!followupTemplateId || busyId === "followup-create"}
+          style={primaryButton(!followupTemplateId || busyId === "followup-create")}
+        >
+          {busyId === "followup-create"
+            ? "Creating…"
+            : "Create 2-Day Follow-up Campaign"}
+        </button>
+        {followupCampaigns.length > 0 && (
+          <p style={{ ...smallText, marginTop: 8, marginBottom: 0 }}>
+            {followupCampaigns.length} follow-up campaign
+            {followupCampaigns.length !== 1 ? "s" : ""} configured.
+          </p>
+        )}
+
         {message && <div style={messageBox}>{message}</div>}
       </div>
 
@@ -218,10 +356,17 @@ export default function Campaigns({ blocks, globalStyles }) {
                 startAt: new Date().toISOString(),
               };
               const selectedIds = campaign.selected_contact_ids || [];
+              const isFollowup =
+                campaign.audience_source === FOLLOWUP_CONTACT_SOURCE;
+              const campaignContacts = isFollowup
+                ? followupContacts
+                : contacts.filter((contact) => contact.source !== FOLLOWUP_CONTACT_SOURCE);
               const selectedContacts =
                 campaign.recipient_mode === "selected"
-                  ? selectedIds.map((id) => contactLookup.get(id)).filter(Boolean)
-                  : contacts;
+                  ? selectedIds
+                      .map((id) => contactLookup.get(id))
+                      .filter((contact) => contact && campaignContacts.includes(contact))
+                  : campaignContacts;
 
               return (
                 <div key={campaign.id} style={card}>
@@ -239,6 +384,12 @@ export default function Campaigns({ blocks, globalStyles }) {
                           ? new Date(campaign.next_run_at).toLocaleString()
                           : "Not scheduled"}
                       </div>
+                      {isFollowup && (
+                        <div style={{ fontSize: 12, color: "#D05A2C", marginTop: 4, fontWeight: 600 }}>
+                          Follow-up list · every 2 days · {selectedContacts.length} contact
+                          {selectedContacts.length !== 1 ? "s" : ""}
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() =>
@@ -282,31 +433,37 @@ export default function Campaigns({ blocks, globalStyles }) {
                   </div>
 
                   <SectionLabel>Audience</SectionLabel>
-                  <div style={sectionRow}>
-                    <Toggle
-                      label="All subscribers"
-                      checked={campaign.recipient_mode !== "selected"}
-                      onChange={() =>
-                        patchCampaign(campaign.id, {
-                          recipient_mode: "all",
-                          selected_contact_ids: [],
-                        })
-                      }
-                    />
-                    <Toggle
-                      label="Select subscribers"
-                      checked={campaign.recipient_mode === "selected"}
-                      onChange={(checked) =>
-                        patchCampaign(campaign.id, {
-                          recipient_mode: checked ? "selected" : "all",
-                        })
-                      }
-                    />
-                  </div>
+                  {isFollowup ? (
+                    <p style={smallText}>
+                      Uses the separate follow-up list imported from Apps Script.
+                    </p>
+                  ) : (
+                    <div style={sectionRow}>
+                      <Toggle
+                        label="All subscribers"
+                        checked={campaign.recipient_mode !== "selected"}
+                        onChange={() =>
+                          patchCampaign(campaign.id, {
+                            recipient_mode: "all",
+                            selected_contact_ids: [],
+                          })
+                        }
+                      />
+                      <Toggle
+                        label="Select subscribers"
+                        checked={campaign.recipient_mode === "selected"}
+                        onChange={(checked) =>
+                          patchCampaign(campaign.id, {
+                            recipient_mode: checked ? "selected" : "all",
+                          })
+                        }
+                      />
+                    </div>
+                  )}
 
                   {campaign.recipient_mode === "selected" && (
                     <div style={pickerBox}>
-                      {contacts.map((contact) => {
+                      {campaignContacts.map((contact) => {
                         const checked = selectedIds.includes(contact.id);
                         return (
                           <label key={contact.id} style={contactRow}>

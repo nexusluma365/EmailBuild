@@ -1,5 +1,5 @@
 import { getToken } from "next-auth/jwt";
-import { upsertContacts } from "@/lib/campaigns";
+import { FOLLOWUP_CONTACT_SOURCE, upsertContacts } from "@/lib/campaigns";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 async function requireUserEmail(req) {
@@ -13,13 +13,23 @@ async function requireUserEmail(req) {
 export async function GET(req) {
   try {
     const userEmail = await requireUserEmail(req);
+    const { searchParams } = new URL(req.url);
+    const source = searchParams.get("source");
+    const includeFollowups = searchParams.get("includeFollowups") === "1";
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    let query = supabase
       .from("contacts")
       .select("*")
       .eq("owner_email", userEmail)
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
+      .eq("status", "active");
+
+    if (source) {
+      query = query.eq("source", source);
+    } else if (!includeFollowups) {
+      query = query.neq("source", FOLLOWUP_CONTACT_SOURCE);
+    }
+
+    const { data, error } = await query.order("created_at", { ascending: false });
 
     if (error) throw error;
     return Response.json({ contacts: data || [] });
