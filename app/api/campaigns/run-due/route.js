@@ -1,4 +1,4 @@
-import { getCampaignContacts, sendCampaignToContacts } from "@/lib/campaigns";
+import { getCampaignContacts, hasScheduleEnded, sendCampaignToContacts } from "@/lib/campaigns";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export const runtime = "nodejs";
@@ -30,6 +30,26 @@ export async function POST(req) {
     const runs = [];
 
     for (const campaign of campaigns || []) {
+      if (hasScheduleEnded(campaign.schedule_config || {}, new Date())) {
+        await supabase
+          .from("campaigns")
+          .update({
+            status: "draft",
+            schedule_enabled: false,
+            next_run_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", campaign.id);
+        runs.push({
+          campaignId: campaign.id,
+          name: campaign.name,
+          sent: 0,
+          failed: 0,
+          skipped: "Campaign stop date has passed.",
+        });
+        continue;
+      }
+
       if (!isSendableCampaign(campaign)) {
         runs.push({
           campaignId: campaign.id,

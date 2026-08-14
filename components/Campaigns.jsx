@@ -21,10 +21,14 @@ const WEEKDAYS = [
 ];
 
 const FOLLOWUP_CONTACT_SOURCE = "followup_gscript";
+const FOLLOWUP_CAMPAIGN_TYPE = "subscriber_followup";
 const FOLLOWUP_SCHEDULE = {
   frequency: "hourly_interval",
+  campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+  intervalDays: 2,
   intervalHours: 48,
   weeklyDays: [1],
+  stopAt: "",
 };
 
 export default function Campaigns({ blocks, globalStyles }) {
@@ -34,6 +38,12 @@ export default function Campaigns({ blocks, globalStyles }) {
   const [name, setName] = useState("");
   const [followupTemplateId, setFollowupTemplateId] = useState("");
   const [followupName, setFollowupName] = useState("Follow-up Emails");
+  const [followupRecipientMode, setFollowupRecipientMode] = useState("all");
+  const [followupSelectedIds, setFollowupSelectedIds] = useState([]);
+  const [followupIntervalDays, setFollowupIntervalDays] = useState(2);
+  const [followupStartMode, setFollowupStartMode] = useState("now");
+  const [followupStartAt, setFollowupStartAt] = useState(() => toDateTimeLocal(new Date().toISOString()));
+  const [followupStopAt, setFollowupStopAt] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
@@ -229,7 +239,14 @@ export default function Campaigns({ blocks, globalStyles }) {
 
     const scheduleConfig = {
       ...FOLLOWUP_SCHEDULE,
-      startAt: new Date().toISOString(),
+      intervalDays: followupIntervalDays,
+      intervalHours: followupIntervalDays * 24,
+      startAt:
+        followupStartMode === "now"
+          ? new Date(Date.now() + 60 * 1000).toISOString()
+          : new Date(followupStartAt).toISOString(),
+      stopAt: followupStopAt ? new Date(followupStopAt).toISOString() : "",
+      templateId: followupTemplateId,
     };
 
     setBusyId("followup-create");
@@ -243,9 +260,10 @@ export default function Campaigns({ blocks, globalStyles }) {
           blocks: template.blocks || [],
           globalStyles: template.globalStyles || {},
           status: "draft",
-          recipientMode: "all",
-          selectedContactIds: [],
-          audience_source: FOLLOWUP_CONTACT_SOURCE,
+          recipientMode: followupRecipientMode,
+          selectedContactIds:
+            followupRecipientMode === "selected" ? followupSelectedIds : [],
+          audience_source: "contacts",
           scheduleEnabled: true,
           scheduleConfig,
         }),
@@ -266,6 +284,24 @@ export default function Campaigns({ blocks, globalStyles }) {
     }
   }
 
+  function updateCampaignTemplate(campaign, templateId) {
+    const template = templates.find((item) => item.id === templateId);
+    if (!template) return;
+    patchCampaign(
+      campaign.id,
+      {
+        subject: template.subject,
+        blocks: template.blocks || [],
+        global_styles: template.globalStyles || {},
+        scheduleConfig: {
+          ...(campaign.schedule_config || {}),
+          templateId,
+        },
+      },
+      "Campaign template updated."
+    );
+  }
+
   const contactLookup = useMemo(
     () => new Map(contacts.map((contact) => [contact.id, contact])),
     [contacts]
@@ -273,8 +309,13 @@ export default function Campaigns({ blocks, globalStyles }) {
   const followupContacts = contacts.filter(
     (contact) => contact.source === FOLLOWUP_CONTACT_SOURCE
   );
+  const subscriberContacts = contacts.filter(
+    (contact) => contact.source !== FOLLOWUP_CONTACT_SOURCE
+  );
   const followupCampaigns = campaigns.filter(
-    (campaign) => campaign.audience_source === FOLLOWUP_CONTACT_SOURCE
+    (campaign) =>
+      campaign.schedule_config?.campaignType === FOLLOWUP_CAMPAIGN_TYPE ||
+      campaign.audience_source === FOLLOWUP_CONTACT_SOURCE
   );
 
   return (
@@ -321,8 +362,8 @@ export default function Campaigns({ blocks, globalStyles }) {
 
         <SectionLabel>Follow-up Campaign</SectionLabel>
         <p style={smallText}>
-          Pulls Name and Email from the credit repair Apps Script into a separate
-          list, then sends the selected saved template every 2 days.
+          Sends the selected saved template to subscribers on a repeating
+          schedule until you turn it off or the optional stop date is reached.
         </p>
         <button
           onClick={syncFollowups}
@@ -357,10 +398,108 @@ export default function Campaigns({ blocks, globalStyles }) {
             ))
           )}
         </select>
+        <div style={sectionRow}>
+          <Toggle
+            label={`All subscribers (${subscriberContacts.length})`}
+            checked={followupRecipientMode === "all"}
+            onChange={() => setFollowupRecipientMode("all")}
+          />
+          <Toggle
+            label={`Select (${followupSelectedIds.length})`}
+            checked={followupRecipientMode === "selected"}
+            onChange={() => setFollowupRecipientMode("selected")}
+          />
+        </div>
+        {followupRecipientMode === "selected" && (
+          <div style={pickerBox}>
+            {subscriberContacts.length === 0 ? (
+              <div style={smallText}>No subscribers available.</div>
+            ) : (
+              subscriberContacts.map((contact) => {
+                const checked = followupSelectedIds.includes(contact.id);
+                return (
+                  <label key={contact.id} style={contactRow}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) =>
+                        setFollowupSelectedIds((prev) =>
+                          e.target.checked
+                            ? Array.from(new Set([...prev, contact.id]))
+                            : prev.filter((id) => id !== contact.id)
+                        )
+                      }
+                    />
+                    <span>
+                      {contact.full_name || contact.email}{" "}
+                      <span style={{ color: "#9CA3AF" }}>({contact.email})</span>
+                    </span>
+                  </label>
+                );
+              })
+            )}
+          </div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+          <label style={fieldLabel}>
+            Every
+            <input
+              type="number"
+              min="1"
+              value={followupIntervalDays}
+              onChange={(e) => setFollowupIntervalDays(Math.max(1, Number(e.target.value || 1)))}
+              className="field-input"
+            />
+          </label>
+          <label style={fieldLabel}>
+            Unit
+            <input value="days" className="field-input" readOnly />
+          </label>
+        </div>
+        <div style={sectionRow}>
+          <Toggle
+            label="Start now"
+            checked={followupStartMode === "now"}
+            onChange={() => setFollowupStartMode("now")}
+          />
+          <Toggle
+            label="Choose start"
+            checked={followupStartMode === "scheduled"}
+            onChange={() => setFollowupStartMode("scheduled")}
+          />
+        </div>
+        {followupStartMode === "scheduled" && (
+          <label style={fieldLabel}>
+            First send
+            <input
+              type="datetime-local"
+              value={followupStartAt}
+              onChange={(e) => setFollowupStartAt(e.target.value)}
+              className="field-input"
+            />
+          </label>
+        )}
+        <label style={fieldLabel}>
+          Stop date optional
+          <input
+            type="datetime-local"
+            value={followupStopAt}
+            onChange={(e) => setFollowupStopAt(e.target.value)}
+            className="field-input"
+          />
+        </label>
         <button
           onClick={createFollowupCampaign}
-          disabled={!followupTemplateId || busyId === "followup-create"}
-          style={primaryButton(!followupTemplateId || busyId === "followup-create")}
+          disabled={
+            !followupTemplateId ||
+            busyId === "followup-create" ||
+            (followupRecipientMode === "selected" && followupSelectedIds.length === 0)
+          }
+          style={primaryButton(
+            !followupTemplateId ||
+              busyId === "followup-create" ||
+              (followupRecipientMode === "selected" && followupSelectedIds.length === 0)
+          )}
         >
           {busyId === "followup-create"
             ? "Creating…"
@@ -392,10 +531,11 @@ export default function Campaigns({ blocks, globalStyles }) {
               };
               const selectedIds = campaign.selected_contact_ids || [];
               const isFollowup =
+                campaign.schedule_config?.campaignType === FOLLOWUP_CAMPAIGN_TYPE ||
                 campaign.audience_source === FOLLOWUP_CONTACT_SOURCE;
               const campaignContacts = isFollowup
-                ? followupContacts
-                : contacts.filter((contact) => contact.source !== FOLLOWUP_CONTACT_SOURCE);
+                ? subscriberContacts
+                : subscriberContacts;
               const selectedContacts =
                 campaign.recipient_mode === "selected"
                   ? selectedIds
@@ -421,28 +561,45 @@ export default function Campaigns({ blocks, globalStyles }) {
                       </div>
                       {isFollowup && (
                         <div style={{ fontSize: 12, color: "#D05A2C", marginTop: 4, fontWeight: 600 }}>
-                          Follow-up list · every 2 days · {selectedContacts.length} contact
+                          Subscribers · every {schedule.intervalDays || Math.round((schedule.intervalHours || 48) / 24) || 2} days · {selectedContacts.length} contact
                           {selectedContacts.length !== 1 ? "s" : ""}
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() =>
-                        patchCampaign(
-                          campaign.id,
-                          {
-                            blocks,
-                            global_styles: globalStyles,
-                            subject,
-                          },
-                          "Campaign content updated from the current template."
-                        )
-                      }
-                      disabled={!hasSendableDraft || busyId === campaign.id}
-                      style={secondaryButton(!hasSendableDraft || busyId === campaign.id)}
-                    >
-                      Use Current Template
-                    </button>
+                    {isFollowup ? (
+                      <div style={{ width: 280 }}>
+                        <select
+                          value={schedule.templateId || ""}
+                          onChange={(e) => updateCampaignTemplate(campaign, e.target.value)}
+                          className="field-input"
+                        >
+                          <option value="">Choose saved template</option>
+                          {templates.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          patchCampaign(
+                            campaign.id,
+                            {
+                              blocks,
+                              global_styles: globalStyles,
+                              subject,
+                            },
+                            "Campaign content updated from the current template."
+                          )
+                        }
+                        disabled={!hasSendableDraft || busyId === campaign.id}
+                        style={secondaryButton(!hasSendableDraft || busyId === campaign.id)}
+                      >
+                        Use Current Template
+                      </button>
+                    )}
                   </div>
 
                   <div style={sectionRow}>
@@ -469,9 +626,39 @@ export default function Campaigns({ blocks, globalStyles }) {
 
                   <SectionLabel>Audience</SectionLabel>
                   {isFollowup ? (
-                    <p style={smallText}>
-                      Uses the separate follow-up list imported from Apps Script.
-                    </p>
+                    <>
+                      <div style={sectionRow}>
+                        <Toggle
+                          label={`All subscribers (${campaignContacts.length})`}
+                          checked={campaign.recipient_mode !== "selected"}
+                          onChange={() =>
+                            patchCampaign(campaign.id, {
+                              audience_source: "contacts",
+                              recipient_mode: "all",
+                              selected_contact_ids: [],
+                              scheduleConfig: {
+                                ...schedule,
+                                campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+                              },
+                            })
+                          }
+                        />
+                        <Toggle
+                          label={`Select subscribers (${selectedIds.length})`}
+                          checked={campaign.recipient_mode === "selected"}
+                          onChange={(checked) =>
+                            patchCampaign(campaign.id, {
+                              audience_source: "contacts",
+                              recipient_mode: checked ? "selected" : "all",
+                              scheduleConfig: {
+                                ...schedule,
+                                campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                    </>
                   ) : (
                     <div style={sectionRow}>
                       <Toggle
@@ -510,6 +697,15 @@ export default function Campaigns({ blocks, globalStyles }) {
                                   ? [...selectedIds, contact.id]
                                   : selectedIds.filter((id) => id !== contact.id);
                                 patchCampaign(campaign.id, {
+                                  ...(isFollowup
+                                    ? {
+                                        audience_source: "contacts",
+                                        scheduleConfig: {
+                                          ...schedule,
+                                          campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+                                        },
+                                      }
+                                    : {}),
                                   recipient_mode: "selected",
                                   selected_contact_ids: next,
                                 });
@@ -526,101 +722,177 @@ export default function Campaigns({ blocks, globalStyles }) {
                   )}
 
                   <SectionLabel>Schedule</SectionLabel>
-                  <select
-                    value={schedule.frequency}
-                    onChange={(e) =>
-                      patchCampaign(campaign.id, {
-                        schedule_enabled: e.target.value !== "manual",
-                        scheduleConfig: {
-                          ...schedule,
-                          frequency: e.target.value,
-                          weeklyDays:
-                            e.target.value === "twice_weekly"
-                              ? [1, 4]
-                              : e.target.value === "weekly"
-                                ? [1]
-                                : schedule.weeklyDays,
-                        },
-                      })
-                    }
-                    className="field-input"
-                    style={{ marginBottom: 8 }}
-                  >
-                    {SCHEDULE_PRESETS.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
+                  {isFollowup ? (
+                    <>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                        <label style={fieldLabel}>
+                          Every
+                          <input
+                            type="number"
+                            min="1"
+                            value={schedule.intervalDays || Math.max(1, Math.round((schedule.intervalHours || 48) / 24))}
+                            onChange={(e) => {
+                              const intervalDays = Math.max(1, Number(e.target.value || 1));
+                              patchCampaign(campaign.id, {
+                                audience_source: "contacts",
+                                schedule_enabled: true,
+                                scheduleConfig: {
+                                  ...schedule,
+                                  campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+                                  frequency: "hourly_interval",
+                                  intervalDays,
+                                  intervalHours: intervalDays * 24,
+                                },
+                              });
+                            }}
+                            className="field-input"
+                          />
+                        </label>
+                        <label style={fieldLabel}>
+                          Unit
+                          <input value="days" className="field-input" readOnly />
+                        </label>
+                      </div>
+                      <label style={fieldLabel}>
+                        First send
+                        <input
+                          type="datetime-local"
+                          value={toDateTimeLocal(schedule.startAt)}
+                          onChange={(e) =>
+                            patchCampaign(campaign.id, {
+                              audience_source: "contacts",
+                              schedule_enabled: true,
+                              scheduleConfig: {
+                                ...schedule,
+                                campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+                                frequency: "hourly_interval",
+                                startAt: new Date(e.target.value).toISOString(),
+                              },
+                            })
+                          }
+                          className="field-input"
+                        />
+                      </label>
+                      <label style={fieldLabel}>
+                        Stop date optional
+                        <input
+                          type="datetime-local"
+                          value={schedule.stopAt ? toDateTimeLocal(schedule.stopAt) : ""}
+                          onChange={(e) =>
+                            patchCampaign(campaign.id, {
+                              audience_source: "contacts",
+                              scheduleConfig: {
+                                ...schedule,
+                                campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+                                stopAt: e.target.value
+                                  ? new Date(e.target.value).toISOString()
+                                  : "",
+                              },
+                            })
+                          }
+                          className="field-input"
+                        />
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        value={schedule.frequency}
+                        onChange={(e) =>
+                          patchCampaign(campaign.id, {
+                            schedule_enabled: e.target.value !== "manual",
+                            scheduleConfig: {
+                              ...schedule,
+                              frequency: e.target.value,
+                              weeklyDays:
+                                e.target.value === "twice_weekly"
+                                  ? [1, 4]
+                                  : e.target.value === "weekly"
+                                    ? [1]
+                                    : schedule.weeklyDays,
+                            },
+                          })
+                        }
+                        className="field-input"
+                        style={{ marginBottom: 8 }}
+                      >
+                        {SCHEDULE_PRESETS.map((preset) => (
+                          <option key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </option>
+                        ))}
+                      </select>
 
-                  {schedule.frequency === "hourly_interval" && (
-                    <input
-                      type="number"
-                      min="1"
-                      value={schedule.intervalHours || 24}
-                      onChange={(e) =>
-                        patchCampaign(campaign.id, {
-                          schedule_enabled: true,
-                          scheduleConfig: {
-                            ...schedule,
-                            frequency: "hourly_interval",
-                            intervalHours: Number(e.target.value || 1),
-                          },
-                        })
-                      }
-                      className="field-input"
-                      style={{ marginBottom: 8 }}
-                    />
-                  )}
+                      {schedule.frequency === "hourly_interval" && (
+                        <input
+                          type="number"
+                          min="1"
+                          value={schedule.intervalHours || 24}
+                          onChange={(e) =>
+                            patchCampaign(campaign.id, {
+                              schedule_enabled: true,
+                              scheduleConfig: {
+                                ...schedule,
+                                frequency: "hourly_interval",
+                                intervalHours: Number(e.target.value || 1),
+                              },
+                            })
+                          }
+                          className="field-input"
+                          style={{ marginBottom: 8 }}
+                        />
+                      )}
 
-                  {(schedule.frequency === "weekly" ||
-                    schedule.frequency === "twice_weekly") && (
-                    <div style={weekdayGrid}>
-                      {WEEKDAYS.map((day) => {
-                        const checked = (schedule.weeklyDays || []).includes(day.value);
-                        return (
-                          <label key={day.value} style={weekdayPill(checked)}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              style={{ display: "none" }}
-                              onChange={(e) => {
-                                let nextDays = e.target.checked
-                                  ? [...(schedule.weeklyDays || []), day.value]
-                                  : (schedule.weeklyDays || []).filter((value) => value !== day.value);
-                                nextDays = [...new Set(nextDays)].sort((a, b) => a - b);
-                                patchCampaign(campaign.id, {
-                                  schedule_enabled: true,
-                                  scheduleConfig: {
-                                    ...schedule,
-                                    weeklyDays: nextDays,
-                                  },
-                                });
-                              }}
-                            />
-                            {day.label}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
+                      {(schedule.frequency === "weekly" ||
+                        schedule.frequency === "twice_weekly") && (
+                        <div style={weekdayGrid}>
+                          {WEEKDAYS.map((day) => {
+                            const checked = (schedule.weeklyDays || []).includes(day.value);
+                            return (
+                              <label key={day.value} style={weekdayPill(checked)}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  style={{ display: "none" }}
+                                  onChange={(e) => {
+                                    let nextDays = e.target.checked
+                                      ? [...(schedule.weeklyDays || []), day.value]
+                                      : (schedule.weeklyDays || []).filter((value) => value !== day.value);
+                                    nextDays = [...new Set(nextDays)].sort((a, b) => a - b);
+                                    patchCampaign(campaign.id, {
+                                      schedule_enabled: true,
+                                      scheduleConfig: {
+                                        ...schedule,
+                                        weeklyDays: nextDays,
+                                      },
+                                    });
+                                  }}
+                                />
+                                {day.label}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
 
-                  {schedule.frequency !== "manual" && (
-                    <input
-                      type="datetime-local"
-                      value={toDateTimeLocal(schedule.startAt)}
-                      onChange={(e) =>
-                        patchCampaign(campaign.id, {
-                          schedule_enabled: true,
-                          scheduleConfig: {
-                            ...schedule,
-                            startAt: new Date(e.target.value).toISOString(),
-                          },
-                        })
-                      }
-                      className="field-input"
-                      style={{ marginTop: 8 }}
-                    />
+                      {schedule.frequency !== "manual" && (
+                        <input
+                          type="datetime-local"
+                          value={toDateTimeLocal(schedule.startAt)}
+                          onChange={(e) =>
+                            patchCampaign(campaign.id, {
+                              schedule_enabled: true,
+                              scheduleConfig: {
+                                ...schedule,
+                                startAt: new Date(e.target.value).toISOString(),
+                              },
+                            })
+                          }
+                          className="field-input"
+                          style={{ marginTop: 8 }}
+                        />
+                      )}
+                    </>
                   )}
 
                   <div style={{ display: "flex", gap: 10, marginTop: 14, alignItems: "center" }}>
@@ -708,6 +980,17 @@ const smallText = {
   color: "#6B7280",
   lineHeight: 1.55,
   marginBottom: 10,
+};
+
+const fieldLabel = {
+  display: "grid",
+  gap: 5,
+  fontSize: 11,
+  fontWeight: 700,
+  color: "#9CA3AF",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  marginBottom: 8,
 };
 
 const messageBox = {
