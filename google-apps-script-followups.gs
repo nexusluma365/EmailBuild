@@ -137,7 +137,7 @@ function doGet(e) {
       const followups = rows
         .map(function(row) {
           return {
-            Name: row.Name || guessNameFromRow_(row),
+            Name: row.Name || row.name || row['Full Name'] || row['Lead Name'] || '',
             Email: row.Email || firstEmailFromRow_(row),
             rowNumber: row.rowNumber,
             data: row
@@ -195,20 +195,6 @@ function firstEmailFromRow_(row) {
   }
 
   return '';
-}
-
-function guessNameFromRow_(row) {
-  const name = row.Name || row.name || row['Full Name'] || row['Lead Name'];
-  if (name) return name;
-
-  const email = firstEmailFromRow_(row);
-  if (!email) return '';
-
-  const localPart = email.split('@')[0] || '';
-  return localPart
-    .replace(/[._-]+/g, ' ')
-    .replace(/\d+/g, '')
-    .trim();
 }
 
 function findEmail_(value) {

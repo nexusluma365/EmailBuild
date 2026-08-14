@@ -138,7 +138,7 @@ export default function Subscribers() {
   const filtered = subs.filter(
     (s) =>
       s.email.includes(search.toLowerCase()) ||
-      (s.full_name || "").toLowerCase().includes(search.toLowerCase())
+      cleanSubscriberName(s.full_name).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -264,7 +264,8 @@ export default function Subscribers() {
             <SectionTitle>Import Subscribers</SectionTitle>
             <p style={helperText}>
               Upload a CSV, TSV, TXT, or readable PDF. The importer scans each
-              row for email addresses and uses name columns when available.
+              row for email addresses. Names are optional and only imported
+              when a real name column is present.
             </p>
             <input
               ref={fileInputRef}
@@ -295,7 +296,7 @@ export default function Subscribers() {
         </div>
       </div>
 
-      <div className="canvas-bg" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="canvas-bg" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <div style={{ height: 44, background: "#ffffff", borderBottom: "1px solid #E5E0DA", display: "flex", alignItems: "center", padding: "0 16px", gap: 8, flexShrink: 0 }}>
           <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
             <input
@@ -312,8 +313,8 @@ export default function Subscribers() {
           </span>
         </div>
 
-        <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
-          <div style={{ background: "#ffffff", borderRadius: 10, border: "1px solid #E5E0DA", overflow: "hidden" }}>
+        <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "20px" }}>
+          <div style={{ background: "#ffffff", borderRadius: 10, border: "1px solid #E5E0DA", overflow: "auto", maxWidth: "100%" }}>
             {loading ? (
               <div style={emptyBox}>Loading subscribers…</div>
             ) : filtered.length === 0 ? (
@@ -321,7 +322,14 @@ export default function Subscribers() {
                 {subs.length === 0 ? "No subscribers yet" : "No results found"}
               </div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <table style={{ width: "100%", minWidth: 760, tableLayout: "fixed", borderCollapse: "collapse" }}>
+                <colgroup>
+                  <col style={{ width: "24%" }} />
+                  <col style={{ width: "34%" }} />
+                  <col style={{ width: "17%" }} />
+                  <col style={{ width: "13%" }} />
+                  <col style={{ width: 118 }} />
+                </colgroup>
                 <thead>
                   <tr style={{ background: "#FAFAF9", borderBottom: "1px solid #EDE9E4" }}>
                     {["Name", "Email", "Source", "Added", ""].map((h, i) => (
@@ -335,6 +343,8 @@ export default function Subscribers() {
                           textTransform: "uppercase",
                           letterSpacing: "0.07em",
                           color: "#9CA3AF",
+                          background: "#FAFAF9",
+                          ...(i === 4 ? stickyActionCell : {}),
                         }}
                       >
                         {h}
@@ -343,27 +353,31 @@ export default function Subscribers() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((sub, idx) => (
+                  {filtered.map((sub, idx) => {
+                    const displayName = cleanSubscriberName(sub.full_name);
+
+                    return (
                     <tr key={sub.id} style={{ borderBottom: idx < filtered.length - 1 ? "1px solid #F5F2EF" : "none" }}>
-                      <td style={{ padding: "11px 16px", fontSize: 13, color: "#1A1D2E", fontWeight: 500 }}>
-                        {sub.full_name || "—"}
+                      <td style={{ ...truncateCell, fontSize: 13, color: "#1A1D2E", fontWeight: 500 }}>
+                        {displayName || "—"}
                       </td>
-                      <td style={{ padding: "11px 16px", fontSize: 12.5, color: "#4B5563", fontFamily: "monospace" }}>
+                      <td title={sub.email} style={{ ...truncateCell, fontSize: 12.5, color: "#4B5563", fontFamily: "monospace" }}>
                         {sub.email}
                       </td>
-                      <td style={{ padding: "11px 16px", fontSize: 12, color: "#6B7280" }}>
+                      <td title={sub.source || "manual"} style={{ ...truncateCell, fontSize: 12, color: "#6B7280" }}>
                         {sub.source || "manual"}
                       </td>
-                      <td style={{ padding: "11px 16px", fontSize: 12, color: "#9CA3AF" }}>
+                      <td style={{ ...truncateCell, fontSize: 12, color: "#9CA3AF" }}>
                         {new Date(sub.created_at).toLocaleDateString()}
                       </td>
-                      <td style={{ padding: "11px 16px", textAlign: "right" }}>
+                      <td style={{ padding: "11px 16px", textAlign: "right", background: "#ffffff", ...stickyActionCell }}>
                         <button onClick={() => remove(sub.id)} style={deleteBtn}>
                           Remove
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -372,6 +386,13 @@ export default function Subscribers() {
       </div>
     </div>
   );
+}
+
+function cleanSubscriberName(value) {
+  const name = String(value || "").trim();
+  if (/^https?:\/\//i.test(name)) return "";
+  if (/@/.test(name)) return "";
+  return name;
 }
 
 function StatPill({ label, value, color }) {
@@ -436,6 +457,20 @@ const helperText = {
   color: "#6B7280",
   lineHeight: 1.5,
   marginBottom: 12,
+};
+
+const truncateCell = {
+  padding: "11px 16px",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const stickyActionCell = {
+  position: "sticky",
+  right: 0,
+  boxShadow: "-8px 0 12px rgba(255,255,255,0.92)",
+  zIndex: 1,
 };
 
 const deleteBtn = {
