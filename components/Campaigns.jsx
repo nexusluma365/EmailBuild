@@ -47,6 +47,7 @@ export default function Campaigns({ blocks, globalStyles }) {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [message, setMessage] = useState("");
+  const [expandedCampaignId, setExpandedCampaignId] = useState("");
 
   const subject =
     blocks?.find((block) => block.type === "subject")?.data?.text || "";
@@ -164,6 +165,92 @@ export default function Campaigns({ blocks, globalStyles }) {
     }
   }
 
+  function isFollowupCampaign(campaign) {
+    return (
+      campaign.schedule_config?.campaignType === FOLLOWUP_CAMPAIGN_TYPE ||
+      campaign.audience_source === FOLLOWUP_CONTACT_SOURCE
+    );
+  }
+
+  function getRunnableSchedule(campaign) {
+    const schedule = campaign.schedule_config || {};
+    if (!isFollowupCampaign(campaign)) {
+      return {
+        frequency: schedule.frequency || "daily",
+        intervalHours: schedule.intervalHours || 24,
+        weeklyDays: schedule.weeklyDays || [1],
+        startAt: schedule.startAt || new Date(Date.now() + 60 * 1000).toISOString(),
+        stopAt: schedule.stopAt || "",
+      };
+    }
+
+    const intervalDays =
+      schedule.intervalDays || Math.max(1, Math.round((schedule.intervalHours || 48) / 24));
+
+    return {
+      ...FOLLOWUP_SCHEDULE,
+      ...schedule,
+      frequency: "hourly_interval",
+      campaignType: FOLLOWUP_CAMPAIGN_TYPE,
+      intervalDays,
+      intervalHours: intervalDays * 24,
+      startAt: schedule.startAt || new Date(Date.now() + 60 * 1000).toISOString(),
+      stopAt: schedule.stopAt || "",
+    };
+  }
+
+  function startCampaign(campaign) {
+    patchCampaign(
+      campaign.id,
+      {
+        status: "active",
+        schedule_enabled: true,
+        ...(isFollowupCampaign(campaign) ? { audience_source: "contacts" } : {}),
+        scheduleConfig: getRunnableSchedule(campaign),
+      },
+      "Campaign started. Scheduled sends are now active."
+    );
+  }
+
+  function stopCampaign(campaign) {
+    patchCampaign(
+      campaign.id,
+      {
+        status: "draft",
+        schedule_enabled: false,
+      },
+      "Campaign stopped. Scheduled sends are paused."
+    );
+  }
+
+  async function deleteCampaign(campaign) {
+    const confirmed = window.confirm(
+      `Delete "${campaign.name}"? This removes the campaign but keeps subscribers.`
+    );
+    if (!confirmed) return;
+
+    setBusyId(`delete:${campaign.id}`);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setMessage(data.error || "Failed to delete campaign.");
+        return;
+      }
+
+      setCampaigns((prev) => prev.filter((item) => item.id !== campaign.id));
+      setExpandedCampaignId((current) => (current === campaign.id ? "" : current));
+      setMessage("Campaign deleted.");
+    } catch (error) {
+      setMessage(error.message || "Failed to delete campaign.");
+    } finally {
+      setBusyId("");
+    }
+  }
+
   async function sendCampaign(id) {
     setBusyId(`send:${id}`);
     try {
@@ -276,7 +363,7 @@ export default function Campaigns({ blocks, globalStyles }) {
       }
 
       setCampaigns((prev) => [data.campaign, ...prev]);
-      setMessage("Follow-up campaign created. Toggle Active on when you are ready.");
+      setMessage("Follow-up campaign created. Click Start when you are ready.");
     } catch (error) {
       setMessage(error.message || "Failed to create follow-up campaign.");
     } finally {
@@ -530,25 +617,37 @@ export default function Campaigns({ blocks, globalStyles }) {
                 startAt: new Date().toISOString(),
               };
               const selectedIds = campaign.selected_contact_ids || [];
-              const isFollowup =
-                campaign.schedule_config?.campaignType === FOLLOWUP_CAMPAIGN_TYPE ||
-                campaign.audience_source === FOLLOWUP_CONTACT_SOURCE;
-              const campaignContacts = isFollowup
-                ? subscriberContacts
-                : subscriberContacts;
+              const isFollowup = isFollowupCampaign(campaign);
+              const campaignContacts = subscriberContacts;
               const selectedContacts =
                 campaign.recipient_mode === "selected"
                   ? selectedIds
                       .map((id) => contactLookup.get(id))
                       .filter((contact) => contact && campaignContacts.includes(contact))
                   : campaignContacts;
+              const isExpanded = expandedCampaignId === campaign.id;
+              const isRunning = campaign.status === "active" && campaign.schedule_enabled;
+              const canStop = campaign.status === "active" || campaign.schedule_enabled;
+              const statusLabel = isRunning
+                ? "Running"
+                : campaign.schedule_enabled
+                  ? "Scheduled"
+                  : "Paused";
+              const intervalDays =
+                schedule.intervalDays ||
+                Math.max(1, Math.round((schedule.intervalHours || 48) / 24));
 
               return (
                 <div key={campaign.id} style={card}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "#1A1D2E" }}>
-                        {campaign.name}
+                  <div style={campaignHeader}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#1A1D2E" }}>
+                          {campaign.name}
+                        </div>
+                        <span style={statusBadge(isRunning)}>
+                          {statusLabel}
+                        </span>
                       </div>
                       <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
                         Subject: {campaign.subject || "—"}
@@ -561,68 +660,102 @@ export default function Campaigns({ blocks, globalStyles }) {
                       </div>
                       {isFollowup && (
                         <div style={{ fontSize: 12, color: "#D05A2C", marginTop: 4, fontWeight: 600 }}>
-                          Subscribers · every {schedule.intervalDays || Math.round((schedule.intervalHours || 48) / 24) || 2} days · {selectedContacts.length} contact
+                          Subscribers · every {intervalDays} days · {selectedContacts.length} contact
                           {selectedContacts.length !== 1 ? "s" : ""}
                         </div>
                       )}
                     </div>
-                    {isFollowup ? (
-                      <div style={{ width: 280 }}>
-                        <select
-                          value={schedule.templateId || ""}
-                          onChange={(e) => updateCampaignTemplate(campaign, e.target.value)}
-                          className="field-input"
-                        >
-                          <option value="">Choose saved template</option>
-                          {templates.map((template) => (
-                            <option key={template.id} value={template.id}>
-                              {template.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ) : (
+                    <div style={campaignActions}>
+                      <button
+                        onClick={() => startCampaign(campaign)}
+                        disabled={busyId === campaign.id || isRunning || selectedContacts.length === 0}
+                        style={actionButton("primary", busyId === campaign.id || isRunning || selectedContacts.length === 0)}
+                      >
+                        Start
+                      </button>
+                      <button
+                        onClick={() => stopCampaign(campaign)}
+                        disabled={busyId === campaign.id || !canStop}
+                        style={actionButton("secondary", busyId === campaign.id || !canStop)}
+                      >
+                        Stop
+                      </button>
                       <button
                         onClick={() =>
-                          patchCampaign(
-                            campaign.id,
-                            {
-                              blocks,
-                              global_styles: globalStyles,
-                              subject,
-                            },
-                            "Campaign content updated from the current template."
+                          setExpandedCampaignId((current) =>
+                            current === campaign.id ? "" : campaign.id
                           )
                         }
-                        disabled={!hasSendableDraft || busyId === campaign.id}
-                        style={secondaryButton(!hasSendableDraft || busyId === campaign.id)}
+                        style={actionButton("secondary")}
                       >
-                        Use Current Template
+                        {isExpanded ? "Hide" : "View"}
                       </button>
-                    )}
+                      <button
+                        onClick={() => deleteCampaign(campaign)}
+                        disabled={busyId === `delete:${campaign.id}`}
+                        style={actionButton("danger", busyId === `delete:${campaign.id}`)}
+                      >
+                        {busyId === `delete:${campaign.id}` ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </div>
 
-                  <div style={sectionRow}>
-                    <Toggle
-                      label="Active"
-                      checked={campaign.status === "active"}
-                      onChange={(checked) =>
-                        patchCampaign(campaign.id, {
-                          status: checked ? "active" : "draft",
-                        })
+                  <div style={campaignMetrics}>
+                    <Metric label="Audience" value={`${selectedContacts.length} contacts`} />
+                    <Metric
+                      label="Template"
+                      value={
+                        templates.find((template) => template.id === schedule.templateId)?.name ||
+                        campaign.subject ||
+                        "Current draft"
                       }
                     />
-                    <Toggle
-                      label="Scheduled"
-                      checked={campaign.schedule_enabled}
-                      onChange={(checked) =>
-                        patchCampaign(campaign.id, {
-                          schedule_enabled: checked,
-                          scheduleConfig: schedule,
-                        })
+                    <Metric
+                      label="Next send"
+                      value={
+                        campaign.next_run_at
+                          ? new Date(campaign.next_run_at).toLocaleString()
+                          : "Not scheduled"
                       }
                     />
                   </div>
+
+                  {isExpanded && (
+                    <>
+                      <div style={{ marginBottom: 14 }}>
+                        {isFollowup ? (
+                          <select
+                            value={schedule.templateId || ""}
+                            onChange={(e) => updateCampaignTemplate(campaign, e.target.value)}
+                            className="field-input"
+                          >
+                            <option value="">Choose saved template</option>
+                            {templates.map((template) => (
+                              <option key={template.id} value={template.id}>
+                                {template.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              patchCampaign(
+                                campaign.id,
+                                {
+                                  blocks,
+                                  global_styles: globalStyles,
+                                  subject,
+                                },
+                                "Campaign content updated from the current template."
+                              )
+                            }
+                            disabled={!hasSendableDraft || busyId === campaign.id}
+                            style={secondaryButton(!hasSendableDraft || busyId === campaign.id)}
+                          >
+                            Use Current Template
+                          </button>
+                        )}
+                      </div>
 
                   <SectionLabel>Audience</SectionLabel>
                   {isFollowup ? (
@@ -900,18 +1033,18 @@ export default function Campaigns({ blocks, globalStyles }) {
                       onClick={() => sendCampaign(campaign.id)}
                       disabled={
                         busyId === `send:${campaign.id}` ||
-                        campaign.status !== "active" ||
                         selectedContacts.length === 0
                       }
                       style={primaryButton(
                         busyId === `send:${campaign.id}` ||
-                          campaign.status !== "active" ||
                           selectedContacts.length === 0
                       )}
                     >
                       {busyId === `send:${campaign.id}` ? "Sending…" : `Send Now to ${selectedContacts.length}`}
                     </button>
                   </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -933,8 +1066,21 @@ function Toggle({ label, checked, onChange }) {
 
 function SectionLabel({ children }) {
   return (
-    <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#9CA3AF", marginBottom: 8, marginTop: 4 }}>
+    <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0, color: "#9CA3AF", marginBottom: 8, marginTop: 4 }}>
       {children}
+    </div>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <div style={metricBox}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 0 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 12.5, color: "#1A1D2E", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -989,7 +1135,7 @@ const fieldLabel = {
   fontWeight: 700,
   color: "#9CA3AF",
   textTransform: "uppercase",
-  letterSpacing: "0.06em",
+  letterSpacing: 0,
   marginBottom: 8,
 };
 
@@ -1018,8 +1164,38 @@ const emptyState = {
 const card = {
   background: "#ffffff",
   border: "1px solid #E5E0DA",
-  borderRadius: 12,
+  borderRadius: 8,
   padding: 16,
+};
+
+const campaignHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  marginBottom: 12,
+  alignItems: "flex-start",
+};
+
+const campaignActions = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  justifyContent: "flex-end",
+  flexShrink: 0,
+};
+
+const campaignMetrics = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 8,
+  marginBottom: 14,
+};
+
+const metricBox = {
+  border: "1px solid #E5E0DA",
+  borderRadius: 7,
+  padding: "9px 10px",
+  minWidth: 0,
 };
 
 const sectionRow = {
@@ -1064,5 +1240,52 @@ function weekdayPill(active) {
     color: active ? "#D05A2C" : "#6B7280",
     fontSize: 12,
     cursor: "pointer",
+  };
+}
+
+function statusBadge(active) {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    minHeight: 22,
+    padding: "3px 8px",
+    borderRadius: 999,
+    background: active ? "#E7F6EC" : "#F5F2EE",
+    color: active ? "#15803D" : "#6B7280",
+    fontSize: 11,
+    fontWeight: 700,
+  };
+}
+
+function actionButton(variant = "secondary", disabled = false) {
+  const colors = {
+    primary: {
+      background: disabled ? "#EDE9E4" : "#D05A2C",
+      border: disabled ? "#EDE9E4" : "#D05A2C",
+      color: disabled ? "#9CA3AF" : "#ffffff",
+    },
+    secondary: {
+      background: disabled ? "#FAFAF9" : "#ffffff",
+      border: "#E5E0DA",
+      color: disabled ? "#9CA3AF" : "#4B5563",
+    },
+    danger: {
+      background: disabled ? "#FAFAF9" : "#ffffff",
+      border: disabled ? "#E5E0DA" : "#F3A6A6",
+      color: disabled ? "#9CA3AF" : "#DC2626",
+    },
+  };
+
+  return {
+    padding: "8px 11px",
+    border: `1px solid ${colors[variant].border}`,
+    borderRadius: 7,
+    background: colors[variant].background,
+    color: colors[variant].color,
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: disabled ? "not-allowed" : "pointer",
+    fontFamily: "inherit",
+    minWidth: 64,
   };
 }

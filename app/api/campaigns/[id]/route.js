@@ -89,6 +89,25 @@ export async function PATCH(req, { params }) {
   }
 }
 
+export async function DELETE(req, { params }) {
+  try {
+    const userEmail = await requireUserEmail(req);
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await supabase
+      .from("campaigns")
+      .delete()
+      .eq("id", params.id)
+      .eq("owner_email", userEmail);
+
+    if (error) throw error;
+    return Response.json({ ok: true });
+  } catch (error) {
+    const status = error.message === "Unauthorized" ? 401 : 500;
+    return Response.json({ error: error.message }, { status });
+  }
+}
+
 function isSendableCampaign(subject, blocks) {
   if (subject !== undefined && !String(subject || "").trim()) return false;
   if (blocks !== undefined) {
