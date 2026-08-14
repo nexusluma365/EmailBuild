@@ -1,13 +1,16 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
+import { contactsFromDelimitedText, contactsFromPdfBytes } from "@/lib/contactImport";
 
 export default function Subscribers() {
   const [subs, setSubs] = useState([]);
   const [form, setForm] = useState({ name: "", email: "" });
+  const [activeTab, setActiveTab] = useState("list");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(true);
+  const fileInputRef = useRef(null);
 
   async function loadSubscribers() {
     setLoading(true);
@@ -89,54 +92,47 @@ export default function Subscribers() {
     a.click();
   };
 
-  const importCsv = async (e) => {
+  const importFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const lines = String(ev.target.result || "").split("\n").slice(1);
-      const contacts = [];
-      for (const line of lines) {
-        const cols = line
-          .split(",")
-          .map((c) => c.replace(/^"|"$/g, "").trim());
-        const [name, email] = cols;
-        if (
-          email &&
-          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
-          !contacts.some((contact) => contact.email === email.toLowerCase())
-        ) {
-          const parts = (name || "").split(/\s+/).filter(Boolean);
-          contacts.push({
-            email: email.toLowerCase(),
-            name: name || "",
-            firstName: parts[0] || "",
-            lastName: parts.slice(1).join(" "),
-          });
-        }
-      }
+    setError("");
+    setSuccess("");
+
+    try {
+      const isPdf =
+        file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      const contacts = isPdf
+        ? contactsFromPdfBytes(new Uint8Array(await file.arrayBuffer()))
+        : contactsFromDelimitedText(await file.text());
 
       if (!contacts.length) {
-        alert("No new valid subscribers found.");
+        setError("No valid email addresses were found in that file.");
+        e.target.value = "";
         return;
       }
 
       const res = await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contacts, source: "csv" }),
+        body: JSON.stringify({
+          contacts,
+          source: isPdf ? "pdf" : "csv",
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Failed to import subscribers.");
         return;
       }
-      setSuccess(`Imported ${data.imported.length} subscriber(s).`);
+      setSuccess(`Imported ${data.imported.length} new subscriber(s). Processed ${data.all.length}.`);
+      setActiveTab("list");
       setTimeout(() => setSuccess(""), 3000);
       loadSubscribers();
-    };
-    reader.readAsText(file);
-    e.target.value = "";
+    } catch (err) {
+      setError(err.message || "Could not read that import file.");
+    } finally {
+      e.target.value = "";
+    }
   };
 
   const filtered = subs.filter(
@@ -159,7 +155,9 @@ export default function Subscribers() {
         }}
       >
         <div style={{ display: "flex", borderBottom: "1px solid #E5E0DA" }}>
-          <div
+          <button
+            type="button"
+            onClick={() => setActiveTab("list")}
             style={{
               flex: 1,
               padding: "12px 0",
@@ -168,14 +166,20 @@ export default function Subscribers() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.04em",
-              color: "#D05A2C",
-              borderBottom: "2px solid #D05A2C",
+              color: activeTab === "list" ? "#D05A2C" : "#9CA3AF",
+              border: "none",
+              borderBottom: `2px solid ${activeTab === "list" ? "#D05A2C" : "transparent"}`,
+              background: "none",
               marginBottom: -1,
+              cursor: "pointer",
+              fontFamily: "inherit",
             }}
           >
             List
-          </div>
-          <div
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("import")}
             style={{
               flex: 1,
               padding: "12px 0",
@@ -184,70 +188,107 @@ export default function Subscribers() {
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: "0.04em",
-              color: "#9CA3AF",
-              borderBottom: "2px solid transparent",
+              color: activeTab === "import" ? "#D05A2C" : "#9CA3AF",
+              border: "none",
+              borderBottom: `2px solid ${activeTab === "import" ? "#D05A2C" : "transparent"}`,
+              background: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              marginBottom: -1,
             }}
           >
             Import
-          </div>
-        </div>
-
-        <div style={{ padding: "14px 12px", borderBottom: "1px solid #EDE9E4" }}>
-          <div
-            style={{
-              fontSize: 10.5,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-              color: "#9CA3AF",
-              marginBottom: 10,
-            }}
-          >
-            Add Subscriber
-          </div>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            placeholder="Full name (optional)"
-            className="field-input"
-            style={{ marginBottom: 6 }}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-          />
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            placeholder="email@example.com *"
-            className="field-input"
-            style={{ marginBottom: 8 }}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-          />
-          <button onClick={add} style={primaryBtn}>
-            Add Subscriber
           </button>
-          {error && <div style={errorBox}>{error}</div>}
-          {success && <div style={successBox}>{success}</div>}
         </div>
 
-        <div
-          style={{
-            padding: "10px 12px",
-            borderBottom: "1px solid #EDE9E4",
-            display: "flex",
-            gap: 6,
-          }}
-        >
-          <label style={toolBtn}>
-            Import CSV
-            <input type="file" accept=".csv" onChange={importCsv} style={{ display: "none" }} />
-          </label>
-          {subs.length > 0 && (
-            <button onClick={exportCsv} style={toolBtn}>
-              Export
+        {activeTab === "list" ? (
+          <>
+            <div style={{ padding: "14px 12px", borderBottom: "1px solid #EDE9E4" }}>
+              <div
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  color: "#9CA3AF",
+                  marginBottom: 10,
+                }}
+              >
+                Add Subscriber
+              </div>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Full name (optional)"
+                className="field-input"
+                style={{ marginBottom: 6 }}
+                onKeyDown={(e) => e.key === "Enter" && add()}
+              />
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="email@example.com *"
+                className="field-input"
+                style={{ marginBottom: 8 }}
+                onKeyDown={(e) => e.key === "Enter" && add()}
+              />
+              <button onClick={add} style={primaryBtn}>
+                Add Subscriber
+              </button>
+              {error && <div style={errorBox}>{error}</div>}
+              {success && <div style={successBox}>{success}</div>}
+            </div>
+
+            <div
+              style={{
+                padding: "10px 12px",
+                borderBottom: "1px solid #EDE9E4",
+              }}
+            >
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" onClick={() => setActiveTab("import")} style={toolBtn}>
+                  Import
+                </button>
+                {subs.length > 0 && (
+                  <button type="button" onClick={exportCsv} style={toolBtn}>
+                    Export
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: "14px 12px", borderBottom: "1px solid #EDE9E4" }}>
+            <SectionTitle>Import Subscribers</SectionTitle>
+            <p style={helperText}>
+              Upload a CSV, TSV, TXT, or readable PDF. The importer scans each
+              row for email addresses and uses name columns when available.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.tsv,.txt,.pdf,text/csv,text/tab-separated-values,application/pdf"
+              onChange={importFile}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              style={{ ...primaryBtn, marginBottom: 8 }}
+            >
+              Choose Import File
             </button>
-          )}
-        </div>
+            {subs.length > 0 && (
+              <button type="button" onClick={exportCsv} style={toolBtn}>
+                Export Current List
+              </button>
+            )}
+            {error && <div style={errorBox}>{error}</div>}
+            {success && <div style={successBox}>{success}</div>}
+          </div>
+        )}
 
         <div style={{ padding: "10px 14px" }}>
           <StatPill label="Total" value={subs.length} color="#D05A2C" />
@@ -343,6 +384,23 @@ function StatPill({ label, value, color }) {
   );
 }
 
+function SectionTitle({ children }) {
+  return (
+    <div
+      style={{
+        fontSize: 10.5,
+        fontWeight: 600,
+        textTransform: "uppercase",
+        letterSpacing: "0.07em",
+        color: "#9CA3AF",
+        marginBottom: 10,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 const primaryBtn = {
   width: "100%",
   padding: "7px 0",
@@ -371,6 +429,13 @@ const toolBtn = {
   fontWeight: 500,
   background: "#FAFAF9",
   fontFamily: "inherit",
+};
+
+const helperText = {
+  fontSize: 12,
+  color: "#6B7280",
+  lineHeight: 1.5,
+  marginBottom: 12,
 };
 
 const deleteBtn = {

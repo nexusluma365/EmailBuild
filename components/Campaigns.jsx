@@ -47,32 +47,36 @@ export default function Campaigns({ blocks, globalStyles }) {
 
   async function loadCampaigns() {
     setLoading(true);
-    const [campaignRes, contactRes, templateRes] = await Promise.all([
-      fetch("/api/campaigns"),
-      fetch("/api/contacts?includeFollowups=1"),
-      fetch("/api/drafts"),
-    ]);
-    const [campaignData, contactData, templateData] = await Promise.all([
-      campaignRes.json(),
-      contactRes.json(),
-      templateRes.json(),
-    ]);
+    try {
+      const [campaignRes, contactRes, templateRes] = await Promise.all([
+        fetch("/api/campaigns"),
+        fetch("/api/contacts?includeFollowups=1"),
+        fetch("/api/drafts"),
+      ]);
+      const [campaignData, contactData, templateData] = await Promise.all([
+        campaignRes.json().catch(() => ({})),
+        contactRes.json().catch(() => ({})),
+        templateRes.json().catch(() => ({})),
+      ]);
 
-    if (campaignRes.ok) setCampaigns(campaignData.campaigns || []);
-    else setMessage(campaignData.error || "Failed to load campaigns.");
+      if (campaignRes.ok) setCampaigns(campaignData.campaigns || []);
+      else setMessage(campaignData.error || "Failed to load campaigns.");
 
-    if (contactRes.ok) setContacts(contactData.contacts || []);
-    else setMessage(contactData.error || "Failed to load subscribers.");
+      if (contactRes.ok) setContacts(contactData.contacts || []);
+      else setMessage(contactData.error || "Failed to load subscribers.");
 
-    if (templateRes.ok) {
-      const loadedTemplates = templateData.drafts || [];
-      setTemplates(loadedTemplates);
-      setFollowupTemplateId((current) => current || loadedTemplates[0]?.id || "");
-    } else {
-      setMessage(templateData.error || "Failed to load templates.");
+      if (templateRes.ok) {
+        const loadedTemplates = templateData.drafts || [];
+        setTemplates(loadedTemplates);
+        setFollowupTemplateId((current) => current || loadedTemplates[0]?.id || "");
+      } else {
+        setMessage(templateData.error || "Failed to load templates.");
+      }
+    } catch (error) {
+      setMessage(error.message || "Could not load campaign data.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -86,108 +90,134 @@ export default function Campaigns({ blocks, globalStyles }) {
     }
 
     setBusyId("create");
-    const scheduleConfig = {
-      frequency: "manual",
-      intervalHours: 24,
-      weeklyDays: [1],
-      startAt: new Date().toISOString(),
-    };
-    const res = await fetch("/api/campaigns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: name.trim() || subject || "Untitled Campaign",
-        subject,
-        blocks,
-        globalStyles,
-        status: "draft",
-        recipientMode: "all",
-        selectedContactIds: [],
-        scheduleEnabled: false,
-        scheduleConfig,
-      }),
-    });
-    const data = await res.json();
-    setBusyId("");
+    try {
+      const scheduleConfig = {
+        frequency: "manual",
+        intervalHours: 24,
+        weeklyDays: [1],
+        startAt: new Date().toISOString(),
+      };
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim() || subject || "Untitled Campaign",
+          subject,
+          blocks,
+          globalStyles,
+          status: "draft",
+          recipientMode: "all",
+          selectedContactIds: [],
+          scheduleEnabled: false,
+          scheduleConfig,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(data.error || "Failed to create campaign.");
+        return;
+      }
 
-    if (!res.ok) {
-      setMessage(data.error || "Failed to create campaign.");
-      return;
+      setCampaigns((prev) => [data.campaign, ...prev]);
+      setName("");
+      setMessage("Campaign created from the current template.");
+    } catch (error) {
+      setMessage(error.message || "Failed to create campaign.");
+    } finally {
+      setBusyId("");
     }
-
-    setCampaigns((prev) => [data.campaign, ...prev]);
-    setName("");
-    setMessage("Campaign created from the current template.");
   }
 
   async function patchCampaign(id, patch, successMessage) {
     setBusyId(id);
-    const res = await fetch(`/api/campaigns/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    const data = await res.json();
-    setBusyId("");
+    try {
+      const res = await fetch(`/api/campaigns/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setMessage(data.error || "Failed to update campaign.");
-      return;
+      if (!res.ok) {
+        setMessage(data.error || "Failed to update campaign.");
+        return;
+      }
+
+      setCampaigns((prev) =>
+        prev.map((campaign) => (campaign.id === id ? data.campaign : campaign))
+      );
+      if (successMessage) setMessage(successMessage);
+    } catch (error) {
+      setMessage(error.message || "Failed to update campaign.");
+    } finally {
+      setBusyId("");
     }
-
-    setCampaigns((prev) =>
-      prev.map((campaign) => (campaign.id === id ? data.campaign : campaign))
-    );
-    if (successMessage) setMessage(successMessage);
   }
 
   async function sendCampaign(id) {
     setBusyId(`send:${id}`);
-    const res = await fetch(`/api/campaigns/${id}/send`, { method: "POST" });
-    const data = await res.json();
-    setBusyId("");
+    try {
+      const res = await fetch(`/api/campaigns/${id}/send`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setMessage(data.error || "Failed to send campaign.");
-      return;
+      if (!res.ok) {
+        setMessage(data.error || "Failed to send campaign.");
+        return;
+      }
+
+      const sent = (data.results || []).filter((row) => row.status === "sent").length;
+      const failed = (data.results || []).filter((row) => row.status === "error").length;
+      setMessage(`Campaign send complete: ${sent} sent, ${failed} failed.`);
+      loadCampaigns();
+    } catch (error) {
+      setMessage(error.message || "Failed to send campaign.");
+    } finally {
+      setBusyId("");
     }
-
-    const sent = (data.results || []).filter((row) => row.status === "sent").length;
-    const failed = (data.results || []).filter((row) => row.status === "error").length;
-    setMessage(`Campaign send complete: ${sent} sent, ${failed} failed.`);
-    loadCampaigns();
   }
 
   async function syncReferrals() {
     setBusyId("sync");
-    const res = await fetch("/api/referrals/sync", { method: "POST" });
-    const data = await res.json();
-    setBusyId("");
+    setMessage("Importing referrals...");
+    try {
+      const res = await fetch("/api/referrals/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setMessage(data.error || "Failed to sync referrals.");
-      return;
+      if (!res.ok) {
+        setMessage(data.error || "Failed to sync referrals.");
+        return;
+      }
+
+      setMessage(`Imported ${data.importedCount} referral contacts into subscribers.`);
+      loadCampaigns();
+    } catch (error) {
+      setMessage(error.message || "Failed to sync referrals.");
+    } finally {
+      setBusyId("");
     }
-
-    setMessage(`Imported ${data.importedCount} referral contacts into subscribers.`);
-    loadCampaigns();
   }
 
   async function syncFollowups() {
     setBusyId("followup-sync");
-    const res = await fetch("/api/followups/sync", { method: "POST" });
-    const data = await res.json();
-    setBusyId("");
+    setMessage("Syncing follow-up list from Google Sheets...");
+    try {
+      const res = await fetch("/api/followups/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setMessage(data.error || "Failed to sync follow-up list.");
-      return;
+      if (!res.ok) {
+        setMessage(data.error || "Failed to sync follow-up list.");
+        return;
+      }
+
+      setMessage(
+        `Synced ${data.totalSynced} follow-up contact(s). ${data.importedCount} new.`
+      );
+      loadCampaigns();
+    } catch (error) {
+      setMessage(error.message || "Failed to sync follow-up list.");
+    } finally {
+      setBusyId("");
     }
-
-    setMessage(
-      `Synced ${data.totalSynced} follow-up contact(s). ${data.importedCount} new.`
-    );
-    loadCampaigns();
   }
 
   async function createFollowupCampaign() {
@@ -203,32 +233,37 @@ export default function Campaigns({ blocks, globalStyles }) {
     };
 
     setBusyId("followup-create");
-    const res = await fetch("/api/campaigns", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: followupName.trim() || "Follow-up Emails",
-        subject: template.subject,
-        blocks: template.blocks || [],
-        globalStyles: template.globalStyles || {},
-        status: "draft",
-        recipientMode: "all",
-        selectedContactIds: [],
-        audience_source: FOLLOWUP_CONTACT_SOURCE,
-        scheduleEnabled: true,
-        scheduleConfig,
-      }),
-    });
-    const data = await res.json();
-    setBusyId("");
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: followupName.trim() || "Follow-up Emails",
+          subject: template.subject,
+          blocks: template.blocks || [],
+          globalStyles: template.globalStyles || {},
+          status: "draft",
+          recipientMode: "all",
+          selectedContactIds: [],
+          audience_source: FOLLOWUP_CONTACT_SOURCE,
+          scheduleEnabled: true,
+          scheduleConfig,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setMessage(data.error || "Failed to create follow-up campaign.");
-      return;
+      if (!res.ok) {
+        setMessage(data.error || "Failed to create follow-up campaign.");
+        return;
+      }
+
+      setCampaigns((prev) => [data.campaign, ...prev]);
+      setMessage("Follow-up campaign created. Toggle Active on when you are ready.");
+    } catch (error) {
+      setMessage(error.message || "Failed to create follow-up campaign.");
+    } finally {
+      setBusyId("");
     }
-
-    setCampaigns((prev) => [data.campaign, ...prev]);
-    setMessage("Follow-up campaign created. Toggle Active on when you are ready.");
   }
 
   const contactLookup = useMemo(

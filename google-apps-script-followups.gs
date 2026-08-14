@@ -131,11 +131,16 @@ function doGet(e) {
       }
 
       const values = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
-      const followups = values
+      const rows = values.map(function(row, index) {
+        return rowToObject_(row, index + 2);
+      });
+      const followups = rows
         .map(function(row) {
           return {
-            Name: valueFromRow_(row, 'Name'),
-            Email: valueFromRow_(row, 'Email')
+            Name: row.Name || guessNameFromRow_(row),
+            Email: row.Email || firstEmailFromRow_(row),
+            rowNumber: row.rowNumber,
+            data: row
           };
         })
         .filter(function(row) {
@@ -144,7 +149,11 @@ function doGet(e) {
 
       return json_({
         ok: true,
-        followups: followups
+        sheetName: SHEET_NAME,
+        headers: HEADERS,
+        totalRows: rows.length,
+        followups: followups,
+        rows: rows
       });
     }
 
@@ -160,6 +169,58 @@ function doGet(e) {
       error: error.message
     });
   }
+}
+
+function rowToObject_(row, rowNumber) {
+  const item = {
+    rowNumber: rowNumber
+  };
+
+  HEADERS.forEach(function(header, index) {
+    item[header] = normalizeJsonValue_(row[index]);
+  });
+
+  return item;
+}
+
+function firstEmailFromRow_(row) {
+  const direct = row.Email || row.email || row['Lead Email'];
+  const directMatch = findEmail_(direct);
+  if (directMatch) return directMatch;
+
+  const keys = Object.keys(row || {});
+  for (let i = 0; i < keys.length; i++) {
+    const found = findEmail_(row[keys[i]]);
+    if (found) return found;
+  }
+
+  return '';
+}
+
+function guessNameFromRow_(row) {
+  const name = row.Name || row.name || row['Full Name'] || row['Lead Name'];
+  if (name) return name;
+
+  const email = firstEmailFromRow_(row);
+  if (!email) return '';
+
+  const localPart = email.split('@')[0] || '';
+  return localPart
+    .replace(/[._-]+/g, ' ')
+    .replace(/\d+/g, '')
+    .trim();
+}
+
+function findEmail_(value) {
+  const match = String(value || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0].toLowerCase() : '';
+}
+
+function normalizeJsonValue_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    return value.toISOString();
+  }
+  return value === undefined || value === null ? '' : value;
 }
 
 function buildUpdatedSessionRow_(row, payload, now) {
